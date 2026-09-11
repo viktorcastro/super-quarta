@@ -767,7 +767,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11h';
+const APP_VER='2026-09-11i';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -895,7 +895,7 @@ let S=freshState();
    as regras do Firebase, que checam o uid contra a lista admins/.
    ============================================================================ */
 let fb={app:null,db:null,auth:null,refs:{},connected:false};
-let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false};
+let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false,erroLogin:null};
 let lastLive='',lastSess='',applyingRemote=false,pushTimer=null;
 
 /* sem Firebase (modo local) o app é de uso pessoal: tudo liberado */
@@ -973,6 +973,8 @@ function connectFirebase(cfg,silent){
       fb.auth.onAuthStateChanged(u=>{
         AUTH.user=u?{uid:String(u.uid||'').slice(0,128),name:limpaNome(u.displayName||u.email||'usuário')||'usuário',email:limpaNome(u.email)}:null;
         AUTH.isAdmin=!!(u&&AUTH.admins[u.uid]===true);
+        if(u)AUTH.erroLogin=null;
+        try{renderGate();}catch(e){}          /* levanta o portão na hora */
         talvezSemear(); renderAuth(); renderAll();
       });
     }
@@ -1012,9 +1014,19 @@ function isTyping(){const a=document.activeElement;return a&&(a.tagName==='INPUT
 
 /* ---------- login ---------- */
 function entrarGoogle(){
-  if(!fb.auth){toast('Conecte o Firebase primeiro');return;}
+  if(!fb.auth){toast('Login indisponível — veja o aviso na tela');renderGate();return;}
+  AUTH.erroLogin=null;
   const p=new firebase.auth.GoogleAuthProvider();
-  fb.auth.signInWithPopup(p).then(()=>toast('Bem-vindo!')).catch(e=>toast('Não consegui entrar: '+(e.message||e.code)));
+  fb.auth.signInWithPopup(p)
+    .then(()=>{AUTH.erroLogin=null;toast('Bem-vindo!');})
+    .catch(e=>{
+      const cod=(e&&e.code)||'';
+      /* celular costuma bloquear pop-up: cai para redirecionamento */
+      if(/popup|cancelled-popup|operation-not-supported/i.test(cod)){
+        try{fb.auth.signInWithRedirect(p);return;}catch(_){}
+      }
+      AUTH.erroLogin=cod+(e&&e.message?' — '+e.message:''); renderGate();
+    });
 }
 function entrarEmail(){
   if(!fb.auth){toast('Conecte o Firebase primeiro');return;}
@@ -1027,7 +1039,7 @@ function entrarEmail(){
         fb.auth.createUserWithEmailAndPassword(em,pw)
           .then(()=>toast('Conta criada!'))
           .catch(er=>toast('Erro: '+(er.message||er.code)));
-      }else toast('Erro: '+(e.message||e.code));
+      }else{AUTH.erroLogin=(e.code||'')+(e.message?' — '+e.message:'');renderGate();}
     });
 }
 function sair(){ if(fb.auth)fb.auth.signOut().then(()=>toast('Você saiu')); }
@@ -1685,12 +1697,28 @@ function renderAprov(){
 function renderGate(){
   const g=$('#gate'); if(!g)return;
   const precisa=fb.connected&&!AUTH.user;
-  if(precisa){
-    g.removeAttribute('hidden'); document.body.classList.add('travado');
-    $('#gateNote').innerHTML=EXIGE_LOGIN
-      ? 'O acesso é restrito à patota. Se não conseguir entrar, peça para o responsável liberar seu e-mail.'
-      : 'Use a mesma conta sempre, para o sistema reconhecer você.';
-  }else{ g.setAttribute('hidden',''); document.body.classList.remove('travado'); }
+  if(!precisa){ g.setAttribute('hidden',''); document.body.classList.remove('travado'); return; }
+  g.removeAttribute('hidden'); document.body.classList.add('travado');
+  const semAuth=!fb.auth;
+  const bg=$('#gateG'), be=$('#gateE');
+  if(bg){bg.disabled=semAuth;bg.style.opacity=semAuth?'.45':'';}
+  if(be){be.disabled=semAuth;be.style.opacity=semAuth?'.45':'';}
+  let nota;
+  if(semAuth){
+    nota=`<b>O login não está disponível.</b> O Firebase conectou, mas o serviço de autenticação não carregou.
+      Verifique se o <b>Authentication</b> está ativado no console (Google e E-mail/senha).`;
+  }else if(AUTH.erroLogin){
+    nota=`<b>Não consegui entrar:</b> ${esc(AUTH.erroLogin)}
+      <br><br>${/unauthorized-domain/.test(AUTH.erroLogin)
+        ? 'O endereço deste site não está autorizado. No Firebase: <b>Authentication → Settings → Authorized domains</b>.'
+        : /popup/.test(AUTH.erroLogin)
+        ? 'A janela de login foi bloqueada. Libere os pop-ups para este site ou tente de novo — vou usar o método alternativo.'
+        : 'Tente de novo. Se persistir, me envie esta mensagem.'}`;
+  }else{
+    nota='O acesso é restrito à patota. Use sempre a mesma conta, para o sistema reconhecer você.';
+  }
+  $('#gateNote').innerHTML=nota+`<div style="margin-top:12px;opacity:.7">versão ${APP_VER} · <a href="#" id="gateReload" style="color:var(--ball-deep)">recarregar</a></div>`;
+  const rl=$('#gateReload'); if(rl)rl.onclick=e=>{e.preventDefault();location.reload();};
 }
 function renderPermissoes(){
   const online=fb.connected, logado=!!AUTH.user, master=podeEditarOficial();
@@ -1729,7 +1757,11 @@ function renderPermissoes(){
   /* editar e apagar rodada oficial: só master */
   $$('[data-edit],[data-del]').forEach(b=>{b.style.display=master?'':'none';});
 }
-function renderAll(){try{renderAllInterno();}catch(e){console.error(e);avisoRender(e);}}
+function renderAll(){
+  try{renderGate();}catch(e){console.error(e);}          /* nunca deixa o portão preso */
+  try{renderAllInterno();}catch(e){console.error(e);avisoRender(e);}
+  try{renderGate();}catch(e){console.error(e);}
+}
 function avisoRender(e){
   if(document.querySelector('#erroRender'))return;
   const w=document.querySelector('.wrap'); if(!w)return;
@@ -1739,7 +1771,7 @@ function avisoRender(e){
     '. Recarregue a página; se persistir, me envie esta mensagem.</span>';
   w.insertBefore(d,w.firstChild);
 }
-function renderAllInterno(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderRestrNote();renderRodadaMode();renderAprov();renderMasterBox();renderGate();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
+function renderAllInterno(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderRestrNote();renderRodadaMode();renderAprov();renderMasterBox();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
 
 /* ================= sorteio ================= */
 let pendingRest=[];
