@@ -286,6 +286,8 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .pend .ph .dt{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px}
 .pend .ph .by{font-size:11.5px;color:var(--muted);flex:1;min-width:0}
 .pend .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.verline{margin-top:11px;font-size:10.5px;color:var(--muted);letter-spacing:.05em}
+.verline b{font-family:'JetBrains Mono';color:var(--ink)}
 .diag{margin-top:10px;padding:11px 13px;border-radius:10px;font-size:12.5px;line-height:1.55;border-left:3px solid}
 .diag code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-size:11px;word-break:break-all}
 .diag.warn{background:#fff7ed;border-color:var(--ball);color:var(--ink)}
@@ -688,7 +690,7 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 
    EXEMPLO depois de preenchido:
 
-   const FIREBASE_CONFIG_TEXT = `
+const FIREBASE_CONFIG_TEXT = `
      apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
      authDomain: "super-quarta.firebaseapp.com",
      databaseURL: "https://super-quarta-default-rtdb.firebaseio.com",
@@ -698,6 +700,8 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
      appId: "1:000000000000:web:aaaaaaaaaaaaaaaa"
    `;
    ========================================================================== */
+
+const APP_VER='2026-09-11a';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -1306,16 +1310,22 @@ function diagnosticoMaster(){
 }
 function renderMasterBox(){
   const el=$('#masterBox'); if(!el)return;
-  if(!fb.connected){el.innerHTML='';return;}
+  const ver=`<div class="verline">versão do arquivo: <b>${APP_VER}</b></div>`;
+  if(!fb.connected){
+    el.innerHTML=`<div class="synccard"><h3>🔑 Acesso master</h3>
+      <div class="diag erro"><b>Diagnóstico:</b> o app está em <b>modo local</b> — não conectou ao Firebase, então não há login nem acesso master.
+      Revise o trecho <code>FIREBASE_CONFIG_TEXT</code> no arquivo (Parte 2 do guia) e confira se a linha <code>databaseURL</code> está lá.</div>${ver}</div>`;
+    return;
+  }
   if(!AUTH.user){
     el.innerHTML=`<div class="synccard"><h3>🔑 Acesso master</h3>
-      <p>Entre com sua conta (botão no topo da página) para ver o seu identificador e configurar o acesso master.</p></div>`;
+      <div class="diag warn"><b>Diagnóstico:</b> conectado ao Firebase, mas <b>você não está logado</b>. Clique em <b>Entrar com Google</b> no topo da página.</div>${ver}</div>`;
     return;
   }
   if(AUTH.isAdmin){
     el.innerHTML=`<div class="synccard" style="border-left:3px solid var(--ball)"><h3>🔑 Acesso master <span class="adm2">ativo</span></h3>
       <p>Você pode aprovar envios, editar e apagar rodadas já salvas.</p>
-      <p style="margin-top:10px">Para dar acesso master a outra pessoa: peça para ela entrar, abrir esta tela e te mandar o identificador dela. Depois adicione no Firebase em <code>superquarta_v4 › admins</code>, com o identificador no nome e <code>true</code> no valor.</p></div>`;
+      <p style="margin-top:10px">Para dar acesso master a outra pessoa: peça para ela entrar, abrir esta tela e te mandar o identificador dela. Depois adicione no Firebase em <code>superquarta_v4 › admins</code>, com o identificador no nome e <code>true</code> no valor.</p>${ver}</div>`;
     return;
   }
   const d=diagnosticoMaster();
@@ -1324,7 +1334,7 @@ function renderMasterBox(){
     <p>Você está logado como <b>${AUTH.user.name}</b>, mas ainda sem acesso master. Copie o identificador abaixo e cadastre no Firebase (Passo 4.3 do guia):</p>
     <div class="uidrow"><code id="uidVal">${AUTH.user.uid}</code><button class="btn btn-primary btn-sm" id="copiaUid" style="width:auto">Copiar</button></div>
     <div class="diag ${d.tipo}"><b>Diagnóstico:</b> ${d.msg}</div>
-    <p style="margin-top:10px">No Firebase: <b>Realtime Database › Dados</b> → criar <code>superquarta_v4</code> › <code>admins</code> → campo com o <b>nome</b> = esse identificador e o <b>valor</b> = <code>true</code>.</p>
+    <p style="margin-top:10px">No Firebase: <b>Realtime Database › Dados</b> → criar <code>superquarta_v4</code> › <code>admins</code> → campo com o <b>nome</b> = esse identificador e o <b>valor</b> = <code>true</code>.</p>${ver}
   </div>`;
   $('#copiaUid').onclick=()=>{
     const t=AUTH.user.uid;
