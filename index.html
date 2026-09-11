@@ -630,6 +630,7 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
   <section class="view" id="view-jogadores">
     <div class="section-head"><span class="eyebrow">Elenco</span><h2>Jogadores</h2></div>
     <p class="hint">Os fixos entram na escalação toda semana. Os suplentes jogam de vez em quando e também pontuam no circuito.</p>
+    <div id="elencoAviso"></div>
     <div class="roster">
       <div><h3 style="font-size:15px;margin-bottom:10px">Fixos <span class="mono" style="color:var(--muted);font-size:12px" id="cntFixos"></span></h3>
         <div id="listFixos"></div>
@@ -747,7 +748,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11f';
+const APP_VER='2026-09-11g';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -1515,7 +1516,9 @@ function renderPlayers(){
   $('#cntFixos').textContent=`(${S.players.fixos.length})`; $('#cntSup').textContent=`(${S.players.suplentes.length})`;
   const mk=(arr,kind)=>'<div class="chiplist">'+arr.map((p,i)=>`<div class="chip"><span class="nm">${p}</span><span class="x" data-rm="${kind}:${i}">×</span></div>`).join('')+'</div>';
   $('#listFixos').innerHTML=mk(S.players.fixos,'fixos'); $('#listSup').innerHTML=mk(S.players.suplentes,'suplentes');
-  $$('[data-rm]').forEach(x=>x.onclick=()=>{const[k,i]=x.dataset.rm.split(':');S.players[k].splice(+i,1);save();renderPlayers();renderCourts();});
+  $$('[data-rm]').forEach(x=>x.onclick=()=>{
+    if(fb.connected&&!podeEditarOficial()){toast('Somente o master pode alterar o elenco');return;}
+    const[k,i]=x.dataset.rm.split(':');S.players[k].splice(+i,1);save();renderPlayers();renderCourts();});
 }
 function renderHeader(){
   const novas=sessoesNovas();
@@ -1647,26 +1650,41 @@ function renderAprov(){
 }
 /* ajusta a interface ao perfil de quem está usando */
 function renderPermissoes(){
-  const online=fb.connected, logado=!!AUTH.user;
+  const online=fb.connected, logado=!!AUTH.user, master=podeEditarOficial();
+  const semLogin=online&&!logado;        /* não pode nada */
+  const soMaster=online&&!master;        /* pode lançar placar, mas não organizar */
   const bt=$('#saveSession');
-  if(bt)bt.textContent=(online&&!AUTH.isAdmin)?'Enviar para aprovação':'Salvar rodada';
+  if(bt)bt.textContent=soMaster?'Enviar para aprovação':'Salvar rodada';
   const lk=$('#lockNote');
   if(lk){
-    if(online&&!logado)lk.innerHTML=`<div class="lock">🔒 <span>Entre com sua conta para lançar resultados. Sem login, a visualização é somente leitura.</span></div>`;
-    else if(online&&!AUTH.isAdmin)lk.innerHTML=`<div class="lock">📤 <span>O que você lançar vai para <b>aprovação do master</b> antes de contar na classificação.</span></div>`;
+    if(semLogin)lk.innerHTML=`<div class="lock">🔒 <span>Entre com sua conta para lançar resultados. Sem login, a visualização é somente leitura.</span></div>`;
+    else if(soMaster)lk.innerHTML=`<div class="lock">📤 <span>Você pode <b>lançar os placares</b>, e cada jogo vai para aprovação do master.
+      O <b>sorteio</b>, as <b>substituições</b> e o <b>elenco</b> ficam com quem tem acesso master.</span></div>`;
     else lk.innerHTML='';
   }
-  const trava=online&&!logado;
-  ['#saveSession','#openDraw','#openAbsence','#clearScores','#autoFill'].forEach(sel=>{
-    const e=$(sel); if(e){e.disabled=trava;e.style.opacity=trava?'.45':'';}
+  /* placares: qualquer pessoa logada */
+  ['#saveSession','#clearScores','#autoFill'].forEach(sel=>{
+    const e=$(sel); if(e){e.disabled=semLogin;e.style.opacity=semLogin?'.45':'';}
   });
-  $$('#courts select').forEach(e=>{e.disabled=trava;});
-  $$('#courts input').forEach(e=>{if(!e.classList.contains('trav'))e.disabled=trava;});
+  $$('#courts input').forEach(e=>{if(!e.classList.contains('trav'))e.disabled=semLogin;});
+  /* organizar a rodada: só master */
+  ['#openDraw','#openAbsence'].forEach(sel=>{
+    const e=$(sel); if(!e)return;
+    const bloq=semLogin||soMaster;
+    e.disabled=bloq; e.style.opacity=bloq?'.4':''; e.style.cursor=bloq?'not-allowed':'';
+    e.title=bloq?'Somente quem tem acesso master pode sortear ou trocar jogadores':'';
+  });
+  const tg=$('#rodadaTeste'); if(tg)tg.disabled=semLogin||soMaster;
+  $$('#courts select').forEach(e=>{e.disabled=semLogin||soMaster;});
+  /* elenco: adicionar e remover jogadores é só do master */
+  $$('[data-rm]').forEach(b=>{b.style.display=(semLogin||soMaster)?'none':'';});
+  $$('[data-add]').forEach(b=>{b.disabled=semLogin||soMaster;b.style.opacity=(semLogin||soMaster)?'.4':'';});
+  ['#addFixo','#addSup'].forEach(sel=>{const e=$(sel);if(e)e.disabled=semLogin||soMaster;});
+  const av=$('#elencoAviso');
+  if(av)av.innerHTML=(semLogin||soMaster)
+    ? `<div class="lock">🔒 <span>Só quem tem <b>acesso master</b> pode adicionar ou remover jogadores.</span></div>` : '';
   /* editar e apagar rodada oficial: só master */
-  $$('[data-edit],[data-del]').forEach(b=>{
-    const ok=podeEditarOficial();
-    b.style.display=ok?'':'none';
-  });
+  $$('[data-edit],[data-del]').forEach(b=>{b.style.display=master?'':'none';});
 }
 function renderAll(){try{renderAllInterno();}catch(e){console.error(e);avisoRender(e);}}
 function avisoRender(e){
@@ -1722,6 +1740,7 @@ function planDraw(pool,rest){
   return{courts,aplicadas};
 }
 function doDraw(restrictions){
+  if(fb.connected&&!podeEditarOficial()){toast('Somente o master pode sortear os confrontos');return{erros:['sem permissão']};}
   const pool=poolPlayers();
   const plano=planDraw(pool,restrictions);
   if(plano.erros)return{erros:plano.erros};
@@ -1871,6 +1890,7 @@ function previewAbsence(out,inn){
 }
 /* com sorteio aleatório não há cascata: quem entra assume a vaga direto */
 function applyAbsence(out,inn){
+  if(fb.connected&&!podeEditarOficial()){toast('Somente o master pode registrar substituições');return null;}
   const pv=previewAbsence(out,inn); if(!pv)return null;
   const q=pv.court;
   S.draft[q].lineup[S.draft[q].lineup.indexOf(out)]=inn;
@@ -2010,7 +2030,9 @@ $('#saveSession').onclick=()=>{
 };
 $('#clearScores').onclick=()=>{['Q1','Q2'].forEach(q=>S.draft[q].scores=blankScores());save();renderCourts();toast('Placares limpos');};
 $('#autoFill').onclick=()=>{const ex={Q1:[[5,3],[2,5],[5,1],[5,4],[3,5]],Q2:[[5,2],[4,5],[5,3],[1,5],[5,4]]};['Q1','Q2'].forEach(q=>S.draft[q].scores=ex[q].map(s=>[...s]));save();renderCourts();toast('Exemplo preenchido');};
-$$('[data-add]').forEach(b=>b.onclick=()=>{const k=b.dataset.add,inp=k==='fixos'?$('#addFixo'):$('#addSup');const v=inp.value.trim();if(!v)return;S.players[k].push(v);inp.value='';save();renderPlayers();renderCourts();toast(v+' adicionado');});
+$$('[data-add]').forEach(b=>b.onclick=()=>{
+  if(fb.connected&&!podeEditarOficial()){toast('Somente o master pode alterar o elenco');return;}
+  const k=b.dataset.add,inp=k==='fixos'?$('#addFixo'):$('#addSup');const v=inp.value.trim();if(!v)return;S.players[k].push(v);inp.value='';save();renderPlayers();renderCourts();toast(v+' adicionado');});
 $('#resetAll').onclick=()=>{if(!confirm('Apagar todas as rodadas e voltar ao estado inicial?'))return;S=freshState();save();renderAll();toast('Tudo zerado');$('.tab[data-view="rodada"]').click();};
 /* aceita tanto JSON quanto o objeto JavaScript que o Firebase entrega,
    com ou sem "const firebaseConfig =" na frente */
