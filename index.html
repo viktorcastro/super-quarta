@@ -701,7 +701,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11a';
+const APP_VER='2026-09-11b';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -813,15 +813,22 @@ function connectFirebase(cfg,silent){
     };
     fb.connected=true; local.set(CFGKEY,cfg);
 
+    /* banco vazio NÃO apaga o que existe localmente — pelo contrário, sobe */
     fb.refs.sessions.on('value',s=>{
-      const v=s.val(); const j=JSON.stringify(v||[]);
+      const v=s.val();
+      const remoto=Array.isArray(v)?v.filter(Boolean):(v?Object.values(v):[]);
+      remotoVazio.sessions=remoto.length===0;
+      if(!remoto.length&&S.sessions.length){talvezSemear();return;}
+      const j=JSON.stringify(remoto);
       if(j===lastSess)return; lastSess=j;
-      applyingRemote=true; S.sessions=Array.isArray(v)?v:(v?Object.values(v):[]); applyingRemote=false;
+      applyingRemote=true; S.sessions=remoto; applyingRemote=false;
       if(!isTyping())renderAll();
     },()=>setSync('err','Erro de sync'));
 
     fb.refs.live.on('value',s=>{
-      const v=s.val(); if(!v)return;
+      const v=s.val();
+      remotoVazio.live=!v;
+      if(!v){talvezSemear();return;}
       const j=JSON.stringify(v); if(j===lastLive)return; lastLive=j;
       applyingRemote=true;
       if(v.players)S.players=v.players;
@@ -839,18 +846,34 @@ function connectFirebase(cfg,silent){
     fb.refs.admins.on('value',s=>{
       AUTH.admins=s.val()||{}; AUTH.adminsErro=null; AUTH.adminsLido=true;
       AUTH.isAdmin=!!(AUTH.user&&AUTH.admins[AUTH.user.uid]===true);
-      renderAuth(); renderAll();
+      talvezSemear(); renderAuth(); renderAll();
     },e=>{AUTH.adminsErro=(e&&e.message)||'sem permissão de leitura';AUTH.adminsLido=true;renderAll();});
 
     if(fb.auth){
       fb.auth.onAuthStateChanged(u=>{
         AUTH.user=u?{uid:u.uid,name:u.displayName||u.email||'usuário',email:u.email||''}:null;
         AUTH.isAdmin=!!(u&&AUTH.admins[u.uid]===true);
-        renderAuth(); renderAll();
+        talvezSemear(); renderAuth(); renderAll();
       });
     }
     setSync('live','Sincronizado'); renderAuth(); return true;
   }catch(e){setSync('err','Erro de sync');if(!silent)toast('Config inválida — confira o firebaseConfig');return false;}
+}
+/* quando o banco ainda está vazio, envia o que existe no navegador em vez de
+   adotar o vazio — evita que a primeira conexão apague o histórico */
+let remotoVazio={sessions:null,live:null};
+function talvezSemear(){
+  if(!fb.connected)return;
+  let subiu=false;
+  if(remotoVazio.sessions&&S.sessions.length&&podeEditarOficial()){
+    try{lastSess=JSON.stringify(S.sessions);fb.refs.sessions.set(S.sessions);remotoVazio.sessions=false;subiu=true;}catch(e){}
+  }
+  if(remotoVazio.live&&podeLancar()){
+    try{const live={players:S.players,draft:S.draft};lastLive=JSON.stringify(live);
+        fb.refs.live.set(live);remotoVazio.live=false;subiu=true;}catch(e){}
+  }
+  if(subiu)toast('Dados enviados para a nuvem ✓');
+  return subiu;
 }
 /* o rascunho e o elenco são colaborativos; as rodadas oficiais só o admin grava */
 function pushRemote(force){
@@ -1323,9 +1346,20 @@ function renderMasterBox(){
     return;
   }
   if(AUTH.isAdmin){
+    const nuvem=remotoVazio.sessions
+      ? `<div class="diag warn"><b>Atenção:</b> o banco na nuvem está <b>sem rodadas</b>, mas este navegador tem <b>${S.sessions.length}</b>. Envie agora para não ficarem só aqui.</div>
+         <button class="btn btn-primary btn-sm" id="btSemear" style="width:auto;margin-top:8px">Enviar ${S.sessions.length} rodada(s) para a nuvem</button>`
+      : `<div class="diag ok"><b>Nuvem:</b> ${S.sessions.length} rodada(s) sincronizada(s).</div>`;
     el.innerHTML=`<div class="synccard" style="border-left:3px solid var(--ball)"><h3>🔑 Acesso master <span class="adm2">ativo</span></h3>
       <p>Você pode aprovar envios, editar e apagar rodadas já salvas.</p>
+      ${nuvem}
       <p style="margin-top:10px">Para dar acesso master a outra pessoa: peça para ela entrar, abrir esta tela e te mandar o identificador dela. Depois adicione no Firebase em <code>superquarta_v4 › admins</code>, com o identificador no nome e <code>true</code> no valor.</p>${ver}</div>`;
+    const bs=$('#btSemear');
+    if(bs)bs.onclick=()=>{
+      remotoVazio.sessions=true; remotoVazio.live=true;
+      if(!talvezSemear())toast('Não consegui enviar — confira a conexão');
+      renderAll();
+    };
     return;
   }
   const d=diagnosticoMaster();
