@@ -286,6 +286,11 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .pend .ph .dt{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px}
 .pend .ph .by{font-size:11.5px;color:var(--muted);flex:1;min-width:0}
 .pend .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.diag{margin-top:10px;padding:11px 13px;border-radius:10px;font-size:12.5px;line-height:1.55;border-left:3px solid}
+.diag code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-size:11px;word-break:break-all}
+.diag.warn{background:#fff7ed;border-color:var(--ball);color:var(--ink)}
+.diag.erro{background:#fff3f0;border-color:var(--down);color:var(--ink)}
+.diag.ok{background:#eafaf3;border-color:var(--up);color:var(--ink)}
 .uidrow{display:flex;gap:9px;align-items:center;flex-wrap:wrap;background:var(--paper);padding:11px 13px;border-radius:10px;margin-top:4px}
 .uidrow code{flex:1;min-width:0;font-family:'JetBrains Mono';font-size:12px;font-weight:700;color:var(--ink);word-break:break-all;background:none;padding:0}
 .adm2{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--court);background:var(--ball);border-radius:5px;padding:2px 6px;font-weight:800;margin-left:6px}
@@ -695,15 +700,7 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
    ========================================================================== */
 
 const FIREBASE_CONFIG_TEXT = `
-const firebaseConfig = {
-  apiKey: "AIzaSyA_gWyMNEiFUnSBT6b4beiMyX5Y0MkXT8Q",
-  authDomain: "super-quarta.firebaseapp.com",
-  databaseURL: "https://super-quarta-default-rtdb.firebaseio.com",
-  projectId: "super-quarta",
-  storageBucket: "super-quarta.firebasestorage.app",
-  messagingSenderId: "463545825981",
-  appId: "1:463545825981:web:03d400162a4b37343415d4"
-};
+COLE_AQUI
 `;
 
 /* ================= storage ================= */
@@ -783,7 +780,7 @@ let S=freshState();
    as regras do Firebase, que checam o uid contra a lista admins/.
    ============================================================================ */
 let fb={app:null,db:null,auth:null,refs:{},connected:false};
-let AUTH={user:null,isAdmin:false,admins:{}};
+let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false};
 let lastLive='',lastSess='',applyingRemote=false,pushTimer=null;
 
 /* sem Firebase (modo local) o app é de uso pessoal: tudo liberado */
@@ -836,10 +833,10 @@ function connectFirebase(cfg,silent){
     });
 
     fb.refs.admins.on('value',s=>{
-      AUTH.admins=s.val()||{};
+      AUTH.admins=s.val()||{}; AUTH.adminsErro=null; AUTH.adminsLido=true;
       AUTH.isAdmin=!!(AUTH.user&&AUTH.admins[AUTH.user.uid]===true);
       renderAuth(); renderAll();
-    },()=>{});
+    },e=>{AUTH.adminsErro=(e&&e.message)||'sem permissão de leitura';AUTH.adminsLido=true;renderAll();});
 
     if(fb.auth){
       fb.auth.onAuthStateChanged(u=>{
@@ -1291,6 +1288,22 @@ function renderHeader(){
   p.textContent=salva?'resultado salvo':(S.draft.teste?'rodada avulsa':`${novas.length} de ${RODADAS_POR_ETAPA} rodadas na etapa`);
   p.className='pill '+(salva||S.draft.teste?'done':'live');
 }
+/* compara o que o app vê com o que está gravado no banco */
+function diagnosticoMaster(){
+  const uid=AUTH.user?AUTH.user.uid:null;
+  if(AUTH.adminsErro)return{tipo:'erro',msg:'Não consegui ler a lista de administradores: '+AUTH.adminsErro+'. Confira as regras do banco (Passo 1.4).'};
+  if(!AUTH.adminsLido)return{tipo:'warn',msg:'Ainda lendo a lista de administradores…'};
+  const keys=Object.keys(AUTH.admins||{});
+  if(!keys.length)return{tipo:'warn',msg:'O banco não tem <b>nenhum</b> administrador cadastrado. O nó <code>superquarta_v4/admins</code> não existe ou está vazio — confira se você criou dentro de <code>superquarta_v4</code>, e não solto na raiz.'};
+  if(!Object.prototype.hasOwnProperty.call(AUTH.admins,uid)){
+    const quase=keys.find(k=>k.trim()===uid||k.toLowerCase()===String(uid).toLowerCase());
+    if(quase)return{tipo:'warn',msg:'Há um cadastro <b>quase</b> igual ao seu (<code>'+quase+'</code>), mas não idêntico — provavelmente espaço sobrando ou letra trocada. Apague e cadastre de novo usando o botão Copiar.'};
+    return{tipo:'warn',msg:'Seu identificador <b>não está</b> na lista. O que está cadastrado hoje: '+keys.map(k=>'<code>'+k+'</code>').join(', ')+'.'};
+  }
+  const v=AUTH.admins[uid];
+  if(v!==true)return{tipo:'warn',msg:'Seu identificador está cadastrado, mas o valor é <code>'+JSON.stringify(v)+'</code> em vez do booleano <code>true</code>. No Firebase, clique no valor e troque o tipo para booleano (sem aspas).'};
+  return{tipo:'ok',msg:'Tudo certo — recarregue a página com Ctrl+Shift+R.'};
+}
 function renderMasterBox(){
   const el=$('#masterBox'); if(!el)return;
   if(!fb.connected){el.innerHTML='';return;}
@@ -1305,10 +1318,12 @@ function renderMasterBox(){
       <p style="margin-top:10px">Para dar acesso master a outra pessoa: peça para ela entrar, abrir esta tela e te mandar o identificador dela. Depois adicione no Firebase em <code>superquarta_v4 › admins</code>, com o identificador no nome e <code>true</code> no valor.</p></div>`;
     return;
   }
+  const d=diagnosticoMaster();
   el.innerHTML=`<div class="synccard" style="border-left:3px solid var(--ball)">
     <h3>🔑 Acesso master</h3>
     <p>Você está logado como <b>${AUTH.user.name}</b>, mas ainda sem acesso master. Copie o identificador abaixo e cadastre no Firebase (Passo 4.3 do guia):</p>
     <div class="uidrow"><code id="uidVal">${AUTH.user.uid}</code><button class="btn btn-primary btn-sm" id="copiaUid" style="width:auto">Copiar</button></div>
+    <div class="diag ${d.tipo}"><b>Diagnóstico:</b> ${d.msg}</div>
     <p style="margin-top:10px">No Firebase: <b>Realtime Database › Dados</b> → criar <code>superquarta_v4</code> › <code>admins</code> → campo com o <b>nome</b> = esse identificador e o <b>valor</b> = <code>true</code>.</p>
   </div>`;
   $('#copiaUid').onclick=()=>{
