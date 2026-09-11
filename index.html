@@ -199,13 +199,15 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .ptable td.q2{font-family:'JetBrains Mono';font-weight:800;color:var(--muted)}
 
 /* jogadores */
-.roster{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.chip{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#fff;border:1px solid #e3e9e4;border-radius:10px;margin-bottom:7px}
-.chip .nm{font-weight:600;flex:1;min-width:0}
-.chip .x{cursor:pointer;color:var(--muted);font-weight:700;font-size:17px;line-height:1;padding:4px 9px;border-radius:6px}
+.roster{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.roster h3{font-size:14px;margin-bottom:9px}
+.chiplist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;padding:7px 9px;background:#fff;border:1px solid #e3e9e4;border-radius:9px;min-width:0}
+.chip .nm{font-weight:600;flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip .x{cursor:pointer;color:#a9b5ba;font-weight:700;font-size:15px;line-height:1;padding:2px 5px;border-radius:5px;flex:none}
 .chip .x:hover{background:#fff3f0;color:var(--down)}
-.addrow{display:flex;gap:8px;margin-top:11px}
-.addrow input{flex:1;min-width:0;padding:10px 12px;border:1px solid #d5ddd6;border-radius:9px;font-family:'Inter';font-size:16px}
+.addrow{display:flex;gap:7px;margin-top:10px}
+.addrow input{flex:1;min-width:0;padding:9px 11px;border:1px solid #d5ddd6;border-radius:9px;font-family:'Inter';font-size:16px}
 .addrow input:focus{outline:none;border-color:var(--ball-deep)}
 .synccard{background:#fff;border:1px solid #e3e9e4;border-radius:13px;padding:17px;box-shadow:var(--shadow);margin-top:24px}
 .synccard h3{font-size:15px;display:flex;align-items:center;gap:9px}
@@ -285,6 +287,16 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .pend .ph{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:9px}
 .pend .ph .dt{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px}
 .pend .ph .by{font-size:11.5px;color:var(--muted);flex:1;min-width:0}
+.folga{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap}
+.jbt{appearance:none;border:1px solid var(--ball-deep);background:var(--ball);color:var(--court);font-family:'Bricolage Grotesque';font-weight:800;font-size:10.5px;padding:4px 10px;border-radius:7px;cursor:pointer;line-height:1.3}
+.jbt:hover{background:var(--ball-bright)}
+.jok{font-size:9.5px;font-weight:700;color:var(--up)}
+.jfila{font-size:9.5px;font-weight:700;color:var(--ball-deep)}
+.pjogo{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--paper);border-radius:10px;padding:11px 13px;font-size:13px}
+.pjogo .lado{flex:1;min-width:0}.pjogo .lado.r{text-align:right}
+.pjogo .lado i{font-style:normal;font-family:'JetBrains Mono';font-weight:800;font-size:10px;color:var(--ball-deep);background:#FFF3DF;border-radius:5px;padding:1px 4px}
+.pjogo .pl{font-family:'JetBrains Mono';font-weight:800;font-size:16px;flex:none}
+.pjogo-sub{font-size:10.5px;color:var(--muted);text-align:center;margin-top:5px}
 .pend .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
 .verline{margin-top:11px;font-size:10.5px;color:var(--muted);letter-spacing:.05em}
 .verline b{font-family:'JetBrains Mono';color:var(--ink)}
@@ -305,6 +317,8 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .toggle .sw{width:38px;height:22px;background:#d5ddd6;border-radius:20px;position:relative;transition:.2s;flex:none}
 .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .toggle input:checked + .sw{background:var(--ball-deep)}.toggle input:checked + .sw::after{transform:translateX(16px)}
+.tgl-mini{display:none}
+@media(max-width:640px){.tgl-full{display:none}.tgl-mini{display:inline}}
 .fine{font-size:11px;color:var(--muted);margin-top:17px;text-align:center}
 .datefield{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:14px}
 .datefield select{padding:10px 12px;border:1px solid #d5ddd6;border-radius:10px;font-family:'Inter';font-size:16px;font-weight:600;background:#fff;min-height:42px;cursor:pointer}
@@ -331,15 +345,27 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
   .starboard{grid-template-columns:1fr}
 }
 @media(max-width:640px){
-  .wrap{padding:16px 13px 80px}
-  .topbar-inner{padding:11px 13px;gap:11px}
-  .brand h1{font-size:19px}
-  .brand .sub{font-size:9px;letter-spacing:.16em}
-  .ball{width:26px;height:26px}
-  .scoreboard{width:100%;margin-left:0;gap:6px}
-  .sb-cell{flex:1;min-width:0;padding:6px 5px}
-  .sb-cell .v{font-size:15px}
-  .sb-cell .k{font-size:8px;letter-spacing:.08em}
+  .wrap{padding:14px 13px 80px}
+  /* cabeçalho enxuto: quanto menos altura, mais rápido se chega ao placar */
+  .topbar-inner{padding:8px 12px;gap:8px}
+  .brand{gap:9px}
+  .brand h1{font-size:17px;white-space:nowrap}
+  .brand .sub{font-size:8.5px;letter-spacing:.12em;white-space:nowrap}
+  .logo-badge{width:30px;height:41px}
+  .scoreboard{width:auto;margin-left:auto;gap:5px}
+  .sb-cell{padding:4px 8px;min-width:0;border-radius:8px}
+  .sb-cell .v{font-size:13px}
+  .sb-cell .k{font-size:7.5px;letter-spacing:.06em}
+  .sb-cell:nth-child(3){display:none}          /* líder sai; está na Classificação */
+  .section-head{margin:2px 0 10px;gap:8px}
+  .section-head h2{font-size:17px}
+  .section-head .eyebrow{font-size:9px}
+  .hint{font-size:12.5px;margin-bottom:12px}
+  .datefield{margin-bottom:10px}
+  .datefield label{font-size:9.5px}
+  .toggle{font-size:11.5px;align-items:flex-start}
+  .court-card .ch{padding:10px 13px}
+  .mini{margin-top:10px}
   .tabs{padding:0 8px}
   .tab{font-size:13px;padding:12px 10px 9px}
   .section-head h2{font-size:19px}
@@ -349,9 +375,14 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
   .lineup .slot{font-size:8px;text-align:center;margin-left:0}
   .team{font-size:12px}
   .score input{width:44px;height:46px;font-size:18px}
-  .btn{width:100%;justify-content:center;text-align:center}
-  .actions{gap:8px}
+  .btn{width:100%;justify-content:center;text-align:center;font-size:13px;padding:11px 14px}
+  .actions{gap:7px}
   .actions .btn-sm{width:100%}
+  /* sortear e falta dividem a linha */
+  #view-rodada > div[style*="display:flex"]{gap:7px!important}
+  #view-rodada #openDraw,#view-rodada #openAbsence{flex:1 1 0;min-width:0!important;font-size:12px;padding:11px 6px}
+  .folga{gap:7px}
+  .jbt{font-size:10px;padding:5px 9px}
   .modal .mf .btn{width:100%}
   .sess-row{flex-wrap:wrap;gap:10px}
   .sess-row .who{max-width:100%;text-align:left;width:100%;order:3;padding-top:2px;border-top:1px dashed #e8ede9}
@@ -362,6 +393,18 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
   .rulecard p,.rulecard ul{font-size:13px}
   .legend{font-size:11.5px;gap:10px}
   .monthbar select{flex:1;min-width:0}
+  /* no celular só o essencial cabe: esconde D, %V, GP e GC para os pontos aparecerem */
+  .ctable{min-width:0}
+  .ctable th:nth-child(5),.ctable td:nth-child(5),
+  .ctable th:nth-child(6),.ctable td:nth-child(6),
+  .ctable th:nth-child(7),.ctable td:nth-child(7),
+  .ctable th:nth-child(8),.ctable td:nth-child(8){display:none}
+  .ctable .player{max-width:132px;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
+  .ctable td,.ctable thead th{padding:9px 4px;font-size:12.5px}
+  .ctable .pos{width:26px;padding-left:10px}
+  .ctable .player{left:26px}
+  .ctable .pt{padding-right:10px}
+  .legend{font-size:11px}
   .datefield{gap:7px}
   .datefield label{width:100%;margin-bottom:-2px}
   .datefield select{flex:1;min-width:0}
@@ -422,7 +465,7 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
       </div>
       <div id="swapLog"></div>
       <div id="restrNote"></div>
-      <div style="margin-bottom:14px"><label class="toggle"><input type="checkbox" id="rodadaTeste"><span class="sw"></span> Rodada de teste (fica no histórico mas não conta para a etapa)</label></div>
+      <div style="margin-bottom:14px"><label class="toggle"><input type="checkbox" id="rodadaTeste"><span class="sw"></span> <span class="tgl-full">Rodada de teste (fica no histórico mas não conta para a etapa)</span><span class="tgl-mini">Rodada de teste</span></label></div>
     </div>
     <div class="courts" id="courts"></div>
     <div class="actions" id="liveActions">
@@ -577,7 +620,6 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
       <p>O sorteio é montado <strong>a partir das restrições</strong>: dois pedidos iguais vão para <strong>quadras diferentes</strong> e o resto é sorteado normalmente.</p>
       <div class="tip">Cabem no máximo <strong>2 pedidos de cada tipo</strong> — uma vaga por quadra. Se houver um terceiro, o sistema avisa e não sorteia até as restrições serem revistas.</div>
     </div>
-    </div>
   </section>
 
   <!-- ===== JOGADORES ===== -->
@@ -701,7 +743,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11b';
+const APP_VER='2026-09-11c';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -757,6 +799,39 @@ function currentMonthKey(){return monthKey(S.draft.date);}
 
 /* ================= estado ================= */
 function blankScores(){return Array(5).fill(null).map(()=>[null,null]);}
+/* O Firebase não guarda valores nulos: um placar em branco some e o array volta
+   com buracos (ou vira objeto). Tudo que chega de fora passa por aqui. */
+function sanearScores(sc){
+  const out=[];
+  for(let i=0;i<5;i++){
+    const p=(sc&&(sc[i]||sc[String(i)]))||[];
+    const a=p[0]===undefined?null:p[0], b=p[1]===undefined?null:p[1];
+    out.push([a,b]);
+  }
+  return out;
+}
+function sanearLado(q,padrao){
+  const lu=[];
+  for(let i=0;i<5;i++){
+    const v=q&&q.lineup?(q.lineup[i]||q.lineup[String(i)]):null;
+    lu.push(v||(padrao&&padrao[i])||('Jogador '+(i+1)));
+  }
+  return{lineup:lu,scores:sanearScores(q&&q.scores)};
+}
+function sanearSessao(s){
+  if(!s||typeof s!=='object')return null;
+  return Object.assign({},s,{Q1:sanearLado(s.Q1),Q2:sanearLado(s.Q2)});
+}
+function sanearDraft(d){
+  const base=freshState().draft;
+  const n=Object.assign(base,d||{});
+  n.Q1=sanearLado(d&&d.Q1,base.Q1.lineup);
+  n.Q2=sanearLado(d&&d.Q2,base.Q2.lineup);
+  if(!Array.isArray(n.swaps))n.swaps=[];
+  if(!Array.isArray(n.restr))n.restr=[];
+  if(!Array.isArray(n.queue))n.queue=[];
+  return n;
+}
 function freshState(){
   const ref=refWednesday(new Date());
   return{
@@ -821,7 +896,7 @@ function connectFirebase(cfg,silent){
       if(!remoto.length&&S.sessions.length){talvezSemear();return;}
       const j=JSON.stringify(remoto);
       if(j===lastSess)return; lastSess=j;
-      applyingRemote=true; S.sessions=remoto; applyingRemote=false;
+      applyingRemote=true; S.sessions=remoto.map(sanearSessao).filter(Boolean); applyingRemote=false;
       if(!isTyping())renderAll();
     },()=>setSync('err','Erro de sync'));
 
@@ -832,7 +907,7 @@ function connectFirebase(cfg,silent){
       const j=JSON.stringify(v); if(j===lastLive)return; lastLive=j;
       applyingRemote=true;
       if(v.players)S.players=v.players;
-      if(v.draft)S.draft=Object.assign(freshState().draft,v.draft);
+      if(v.draft)S.draft=sanearDraft(v.draft);
       applyingRemote=false;
       if(!isTyping())renderAll();
     });
@@ -926,6 +1001,53 @@ function renderAuth(){
 }
 
 /* ---------- fila de aprovação ---------- */
+/* localiza (ou cria) a rodada oficial de uma data, para receber jogos avulsos */
+function sessaoOficial(iso,modelo){
+  let s=S.sessions.find(x=>x.iso===iso);
+  if(s)return s;
+  s={iso,date:fromISO(iso).toLocaleDateString('pt-BR'),modo:(modelo&&modelo.modo)||MODO,
+     teste:!!(modelo&&modelo.teste),primeiroDia:false,serve:(modelo&&modelo.serve)||0,swaps:[],
+     Q1:{lineup:(modelo&&modelo.Q1lineup)||[],scores:blankScores()},
+     Q2:{lineup:(modelo&&modelo.Q2lineup)||[],scores:blankScores()}};
+  S.sessions.push(s);
+  S.sessions.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
+  return s;
+}
+/* grava um único jogo na rodada oficial */
+function aplicarJogo(p){
+  const s=sessaoOficial(p.iso,{modo:p.modo,teste:p.teste,serve:p.serve});
+  if(!s[p.quadra].lineup.length||s[p.quadra].lineup.some(x=>!x))s[p.quadra].lineup=(p.lineup||[]).slice(0,5);
+  s[p.quadra].scores=sanearScores(s[p.quadra].scores);
+  s[p.quadra].scores[p.jogo]=[p.placar[0],p.placar[1]];
+  if(p.serve!=null)s.serve=p.serve;
+  return s;
+}
+/* envia UM jogo — master grava direto, os demais mandam para a fila */
+function enviarJogo(q,i){
+  const d=S.draft[q], sc=d.scores[i];
+  if(sc[0]==null||sc[1]==null){toast('Preencha os dois placares do jogo '+(i+1));return;}
+  const p={tipo:'jogo',iso:S.draft.date,date:fromISO(S.draft.date).toLocaleDateString('pt-BR'),
+           quadra:q,jogo:i,placar:[sc[0],sc[1]],lineup:d.lineup.slice(),
+           serve:S.draft.serve,modo:MODO,teste:!!S.draft.teste};
+  if(!fb.connected||AUTH.isAdmin){
+    aplicarJogo(p); save(); renderAll();
+    toast(`Jogo ${i+1} da ${q==='Q1'?'Quadra 1':'Quadra 2'} registrado ✓`);
+    return;
+  }
+  if(!AUTH.user){toast('Entre com sua conta para lançar');return;}
+  const item=Object.assign({by:AUTH.user.uid,byName:AUTH.user.name,at:new Date().toISOString()},p);
+  try{fb.refs.pending.push(item);toast(`Jogo ${i+1} enviado para aprovação ✓`);}
+  catch(e){toast('Não consegui enviar — tente de novo');}
+}
+/* um jogo já foi para a nuvem? (para não reenviar sem querer) */
+function jogoJaEnviado(q,i){
+  const iso=S.draft.date;
+  const of=S.sessions.find(x=>x.iso===iso);
+  if(of){const sc=sanearScores(of[q].scores);if(sc[i][0]!=null&&sc[i][1]!=null)return'oficial';}
+  if((S.pending||[]).some(p=>p.tipo==='jogo'&&p.iso===iso&&p.quadra===q&&p.jogo===i))return'fila';
+  return null;
+}
+
 function enviarParaAprovacao(sess){
   if(!fb.connected){return false;}
   const item={by:AUTH.user?AUTH.user.uid:'anon',byName:AUTH.user?AUTH.user.name:'anônimo',
@@ -935,8 +1057,15 @@ function enviarParaAprovacao(sess){
 function aprovarPendente(id){
   const it=(S.pending||[]).find(x=>x.id===id); if(!it)return;
   if(!podeEditarOficial()){toast('Só o master aprova');return;}
+  if(it.tipo==='jogo'){
+    aplicarJogo(it);
+    try{fb.refs.pending.child(id).remove();}catch(e){}
+    S.pending=(S.pending||[]).filter(x=>x.id!==id);
+    save();renderAll();toast('Jogo aprovado ✓');
+    return;
+  }
   if(S.sessions.some(s=>s.iso===it.session.iso)&&!confirm('Já existe rodada em '+(it.session.date||it.session.iso)+'. Aprovar mesmo assim?'))return;
-  S.sessions.push(it.session);
+  S.sessions.push(sanearSessao(it.session));
   S.sessions.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
   try{fb.refs.pending.child(id).remove();}catch(e){}
   S.pending=(S.pending||[]).filter(x=>x.id!==id);
@@ -951,7 +1080,12 @@ function recusarPendente(id){
 }
 
 function save(){local.set(KEY,S);pushRemote();}
-function load(){const d=local.get(KEY);if(d)S=Object.assign(freshState(),d);}
+function load(){
+  const d=local.get(KEY); if(!d)return;
+  S=Object.assign(freshState(),d);
+  S.sessions=(S.sessions||[]).map(sanearSessao).filter(Boolean);
+  S.draft=sanearDraft(S.draft);
+}
 
 /* ================= motor de pontuação ================= */
 function computeCourt(lineup,scores,ptsTable,modo){
@@ -1106,6 +1240,14 @@ function renderRodadaMode(){
     save();renderAll();
   };
 }
+function btnJogo(q,i,pronto){
+  const st=jogoJaEnviado(q,i);
+  if(st==='oficial')return `<span class="jok">✓ registrado</span>`;
+  if(st==='fila')return `<span class="jfila">⏳ aguardando aprovação</span>`;
+  if(!pronto)return '';
+  const rotulo=(!fb.connected||AUTH.isAdmin)?'Registrar':'Enviar';
+  return `<button class="jbt" data-env="${q}:${i}">${rotulo} jogo ${i+1}</button>`;
+}
 function renderCourts(){
   const c=$('#courts'); c.innerHTML='';
   const salva=savedForDate();
@@ -1135,7 +1277,7 @@ function renderCourts(){
           <input class="mono ${ow?'win':''}" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-q="${q}" data-m="${i}" data-s="${oI}" value="${go==null?'':go}">
         </div>
         <div class="team r">${temPts?`<span class="mp">+${po}</span>`:''}${nameO}</div>
-      </div><div class="folga">jogo ${i+1} · fora: <b>${d.lineup[m.out]}</b></div>`;
+      </div><div class="folga"><span>jogo ${i+1} · fora: <b>${d.lineup[m.out]}</b></span>${btnJogo(q,i,temPts)}</div>`;
     }).join('');
     const standHtml=rows.map((r,i)=>`<tr class="${i===0?'r1':''}"><td class="pos">${i+1}</td><td class="l nm">${r.p}</td>
       <td>${r.V}</td><td>${r.D}</td><td>${r.GP}</td><td>${r.GC}</td>
@@ -1151,6 +1293,7 @@ function renderCourts(){
 }
 function bindCourtInputs(){
   $$('#courts select').forEach(sel=>sel.onchange=e=>{const{q,slot}=e.target.dataset;S.draft[q].lineup[+slot]=e.target.value;save();renderCourts();});
+  $$('[data-env]').forEach(b=>b.onclick=()=>{const[q,i]=b.dataset.env.split(':');enviarJogo(q,+i);});
   $$('#courts input').forEach(inp=>{
     inp.oninput=e=>{const v=e.target.value.replace(/[^0-9]/g,'').slice(0,1);e.target.value=v;const{q,m,s}=e.target.dataset;S.draft[q].scores[+m][+s]=v===''?null:+v;};
     inp.onblur=()=>{save();renderCourts();}; inp.onkeydown=e=>{if(e.key==='Enter')e.target.blur();};
@@ -1288,7 +1431,7 @@ function renderSessoes(){
 
 function renderPlayers(){
   $('#cntFixos').textContent=`(${S.players.fixos.length})`; $('#cntSup').textContent=`(${S.players.suplentes.length})`;
-  const mk=(arr,kind)=>arr.map((p,i)=>`<div class="chip"><span class="nm">${p}</span><span class="x" data-rm="${kind}:${i}">×</span></div>`).join('');
+  const mk=(arr,kind)=>'<div class="chiplist">'+arr.map((p,i)=>`<div class="chip"><span class="nm">${p}</span><span class="x" data-rm="${kind}:${i}">×</span></div>`).join('')+'</div>';
   $('#listFixos').innerHTML=mk(S.players.fixos,'fixos'); $('#listSup').innerHTML=mk(S.players.suplentes,'suplentes');
   $$('[data-rm]').forEach(x=>x.onclick=()=>{const[k,i]=x.dataset.rm.split(':');S.players[k].splice(+i,1);save();renderPlayers();renderCourts();});
 }
@@ -1390,9 +1533,27 @@ function renderAprov(){
   if(!n){el.innerHTML=`<div class="empty"><div class="logo-mark"></div>Nenhum envio aguardando aprovação.</div>`;return;}
   el.innerHTML=(S.pending||[]).map(p=>{
     const s=p.session||{};
-    return `<div class="pend">
-      <div class="ph"><span class="dt">${s.date||s.iso||'—'}</span>
-        <span class="by">enviado por <b>${p.byName||'?'}</b>${p.at?' · '+new Date(p.at).toLocaleString('pt-BR'):''}</span></div>
+    const cab=`<div class="ph"><span class="dt">${p.date||s.date||p.iso||s.iso||'—'}</span>
+        <span class="by">enviado por <b>${p.byName||'?'}</b>${p.at?' · '+new Date(p.at).toLocaleString('pt-BR'):''}</span></div>`;
+    if(p.tipo==='jogo'){
+      const m=SCHED[p.jogo], L=p.lineup||[];
+      const pat=SERVE[p.serve||0], srvA=pat[p.jogo]==='a';
+      const sT=srvA?m.a:m.b, oT=srvA?m.b:m.a;
+      const ps=srvA?p.placar[0]:p.placar[1], po=srvA?p.placar[1]:p.placar[0];
+      const[pa,pb]=matchPoints(p.placar[0],p.placar[1]);
+      const qs=srvA?pa:pb, qo=srvA?pb:pa;
+      return `<div class="pend">${cab}
+        <div class="pjogo"><span class="tagq${p.quadra==='Q2'?' q2':''}">${p.quadra}</span>
+          <span class="lado"><b>${L[sT[0]]} & ${L[sT[1]]}</b> <i>+${qs}</i></span>
+          <span class="pl">${ps} × ${po}</span>
+          <span class="lado r"><i>+${qo}</i> <b>${L[oT[0]]} & ${L[oT[1]]}</b></span></div>
+        <div class="pjogo-sub">jogo ${p.jogo+1} · fora: ${L[m.out]}</div>
+        <div class="acts">
+          <button class="btn btn-primary btn-sm" data-ap="${p.id}">Aprovar jogo</button>
+          <button class="btn btn-danger btn-sm" data-rj="${p.id}">Recusar</button>
+        </div></div>`;
+    }
+    return `<div class="pend">${cab}
       ${sessionDetail(s)}
       <div class="acts">
         <button class="btn btn-primary btn-sm" data-ap="${p.id}">Aprovar e computar</button>
