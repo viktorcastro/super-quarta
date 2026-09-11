@@ -286,6 +286,9 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .pend .ph .dt{font-family:'Bricolage Grotesque';font-weight:800;font-size:15px}
 .pend .ph .by{font-size:11.5px;color:var(--muted);flex:1;min-width:0}
 .pend .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.uidrow{display:flex;gap:9px;align-items:center;flex-wrap:wrap;background:var(--paper);padding:11px 13px;border-radius:10px;margin-top:4px}
+.uidrow code{flex:1;min-width:0;font-family:'JetBrains Mono';font-size:12px;font-weight:700;color:var(--ink);word-break:break-all;background:none;padding:0}
+.adm2{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--court);background:var(--ball);border-radius:5px;padding:2px 6px;font-weight:800;margin-left:6px}
 .lock{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px dashed #cfd8d2;border-radius:11px;padding:13px 15px;font-size:12.5px;color:var(--muted);margin-bottom:14px}
 .lock b{color:var(--ink)}
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--court);color:#eaf3f0;padding:12px 20px;border-radius:12px;font-weight:600;font-size:13.5px;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s;z-index:70;border:1px solid var(--ball);max-width:calc(100vw - 32px);text-align:center}
@@ -582,6 +585,8 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
         <div id="listSup"></div>
         <div class="addrow"><input id="addSup" placeholder="Adicionar suplente…"><button class="btn btn-ghost btn-sm" data-add="suplentes" style="width:auto">Add</button></div></div>
     </div>
+    <div id="masterBox"></div>
+
     <div class="synccard">
       <h3><span class="syncdot" id="syncDot2"></span> Sincronização da patota</h3>
       <p>Conecte um banco gratuito (Firebase) e todos veem o mesmo placar pelo mesmo link, em tempo real. Configura uma vez só:</p>
@@ -665,17 +670,20 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 /* ==========================================================================
    ####  CONFIGURAÇÃO DO FIREBASE  ####
 
-   Para a patota inteira ver o mesmo placar pelo mesmo link, cole aqui a
-   configuração do seu projeto Firebase (o guia de publicação explica como
-   obter). Basta colar o objeto entre as chaves, exatamente como o Firebase
-   entrega — com ou sem aspas nas chaves, tanto faz.
+   Cole a configuração do seu projeto ENTRE AS CRASES abaixo, no lugar de
+   COLE_AQUI. Pode colar exatamente como o Firebase entrega, incluindo o
+   "const firebaseConfig =" na frente — o sistema entende do mesmo jeito.
 
-   Enquanto estiver null, o sistema funciona normalmente em modo local
-   (os dados ficam só no navegador de quem abrir).
+   Enquanto estiver COLE_AQUI, o sistema roda em modo local (dados só no
+   navegador de quem abrir).
 
-   EXEMPLO de como fica depois de preenchido:
+   É seguro colar aqui: este trecho é texto, não código. Mesmo que o editor
+   troque aspas ou você cole algo a mais, a página NÃO quebra — no pior caso
+   aparece um aviso explicando o que corrigir.
 
-   const FIREBASE_CONFIG = {
+   EXEMPLO depois de preenchido:
+
+   const FIREBASE_CONFIG_TEXT = `
      apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
      authDomain: "super-quarta.firebaseapp.com",
      databaseURL: "https://super-quarta-default-rtdb.firebaseio.com",
@@ -683,10 +691,11 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
      storageBucket: "super-quarta.appspot.com",
      messagingSenderId: "000000000000",
      appId: "1:000000000000:web:aaaaaaaaaaaaaaaa"
-   };
+   `;
    ========================================================================== */
 
-const FIREBASE_CONFIG = {
+const FIREBASE_CONFIG_TEXT = `
+const firebaseConfig = {
   apiKey: "AIzaSyA_gWyMNEiFUnSBT6b4beiMyX5Y0MkXT8Q",
   authDomain: "super-quarta.firebaseapp.com",
   databaseURL: "https://super-quarta-default-rtdb.firebaseio.com",
@@ -694,6 +703,14 @@ const FIREBASE_CONFIG = {
   storageBucket: "super-quarta.firebasestorage.app",
   messagingSenderId: "463545825981",
   appId: "1:463545825981:web:03d400162a4b37343415d4"
+};
+`;
+
+/* ================= storage ================= */
+const mem={};
+const local={
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return mem[k]??null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){mem[k]=v}}
 };
 const KEY='superquarta_v3', CFGKEY='superquarta_fbcfg';
 
@@ -1274,6 +1291,38 @@ function renderHeader(){
   p.textContent=salva?'resultado salvo':(S.draft.teste?'rodada avulsa':`${novas.length} de ${RODADAS_POR_ETAPA} rodadas na etapa`);
   p.className='pill '+(salva||S.draft.teste?'done':'live');
 }
+function renderMasterBox(){
+  const el=$('#masterBox'); if(!el)return;
+  if(!fb.connected){el.innerHTML='';return;}
+  if(!AUTH.user){
+    el.innerHTML=`<div class="synccard"><h3>🔑 Acesso master</h3>
+      <p>Entre com sua conta (botão no topo da página) para ver o seu identificador e configurar o acesso master.</p></div>`;
+    return;
+  }
+  if(AUTH.isAdmin){
+    el.innerHTML=`<div class="synccard" style="border-left:3px solid var(--ball)"><h3>🔑 Acesso master <span class="adm2">ativo</span></h3>
+      <p>Você pode aprovar envios, editar e apagar rodadas já salvas.</p>
+      <p style="margin-top:10px">Para dar acesso master a outra pessoa: peça para ela entrar, abrir esta tela e te mandar o identificador dela. Depois adicione no Firebase em <code>superquarta_v4 › admins</code>, com o identificador no nome e <code>true</code> no valor.</p></div>`;
+    return;
+  }
+  el.innerHTML=`<div class="synccard" style="border-left:3px solid var(--ball)">
+    <h3>🔑 Acesso master</h3>
+    <p>Você está logado como <b>${AUTH.user.name}</b>, mas ainda sem acesso master. Copie o identificador abaixo e cadastre no Firebase (Passo 4.3 do guia):</p>
+    <div class="uidrow"><code id="uidVal">${AUTH.user.uid}</code><button class="btn btn-primary btn-sm" id="copiaUid" style="width:auto">Copiar</button></div>
+    <p style="margin-top:10px">No Firebase: <b>Realtime Database › Dados</b> → criar <code>superquarta_v4</code> › <code>admins</code> → campo com o <b>nome</b> = esse identificador e o <b>valor</b> = <code>true</code>.</p>
+  </div>`;
+  $('#copiaUid').onclick=()=>{
+    const t=AUTH.user.uid;
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(()=>toast('Identificador copiado ✓')).catch(()=>selecionaUid());
+    }else selecionaUid();
+  };
+  function selecionaUid(){
+    const n=$('#uidVal'), r=document.createRange(); r.selectNodeContents(n);
+    const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    toast('Selecionado — copie com Ctrl+C');
+  }
+}
 function renderAprov(){
   const tab=$('#tabAprov'), n=(S.pending||[]).length;
   if(AUTH.isAdmin){tab.removeAttribute('hidden');$('#aprovBadge').textContent=n;}
@@ -1316,7 +1365,7 @@ function renderPermissoes(){
     b.style.display=ok?'':'none';
   });
 }
-function renderAll(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderRestrNote();renderRodadaMode();renderAprov();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
+function renderAll(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderRestrNote();renderRodadaMode();renderAprov();renderMasterBox();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
 
 /* ================= sorteio ================= */
 let pendingRest=[];
@@ -1653,11 +1702,18 @@ $('#resetAll').onclick=()=>{if(!confirm('Apagar todas as rodadas e voltar ao est
 /* aceita tanto JSON quanto o objeto JavaScript que o Firebase entrega,
    com ou sem "const firebaseConfig =" na frente */
 function parseConfig(txt){
-  let t=String(txt||'');
+  let t=String(txt||'')
+    .replace(/[\u201C\u201D\u201E\u2033]/g,'"')   /* aspas curvas duplas */
+    .replace(/[\u2018\u2019\u2032]/g,"'")          /* aspas curvas simples */
+    .replace(/\u00A0/g,' ');                        /* espaço não separável */
   const k=t.search(/firebaseConfig\s*=/);
   if(k>=0)t=t.slice(k);                       // ignora imports antes da config
-  const a=t.indexOf('{');
-  if(a<0)throw new Error('não achei a configuração');
+  let a=t.indexOf('{');
+  if(a<0){
+    /* colaram só os pares, sem as chaves — embrulha */
+    if(/[A-Za-z_$][\w$]*\s*:/.test(t)){t='{'+t+'}';a=0;}
+    else throw new Error('não achei a configuração');
+  }
   let depth=0,b=-1;                           // casa a chave de abertura com a de fechamento
   for(let i=a;i<t.length;i++){
     if(t[i]==='{')depth++;
@@ -1746,7 +1802,15 @@ function seedOnce(){
 }
 
 /* ================= boot ================= */
+function avisoConfig(msg){
+  const w=document.querySelector('.wrap'); if(!w)return;
+  const d=document.createElement('div');
+  d.className='lock'; d.style.borderColor='#f0c9bd'; d.style.background='#fff5f2';
+  d.innerHTML='⚠️ <span>'+msg+'</span>';
+  w.insertBefore(d,w.firstChild);
+}
 (function(){
+ try{
   load();
   if(!S.draft.date)S.draft.date=toISO(refWednesday(new Date()));
   const seeded=seedOnce();
@@ -1755,12 +1819,24 @@ function seedOnce(){
   renderAll();
   /* a config gravada no arquivo tem prioridade — é o que faz todo mundo
      enxergar o mesmo placar pelo mesmo link */
-  const cfg=FIREBASE_CONFIG||local.get(CFGKEY);
-  if(cfg){
-    if(!FIREBASE_CONFIG)$('#fbConfig').value=JSON.stringify(cfg,null,1);
-    else{$('#fbConfig').value='';$('#fbConfig').placeholder='Configuração já gravada no arquivo — nada a fazer aqui.';}
+  let cfg=null, erroCfg=null;
+  const txt=(typeof FIREBASE_CONFIG_TEXT==='string')?FIREBASE_CONFIG_TEXT:'';
+  if(txt.trim()&&txt.indexOf('COLE_AQUI')<0){
+    try{cfg=parseConfig(txt);}catch(e){erroCfg=e.message;}
+  }
+  if(!cfg&&!erroCfg)cfg=local.get(CFGKEY);
+  if(erroCfg){
+    avisoConfig('Não consegui ler a configuração do Firebase: '+erroCfg+
+      '. O sistema segue em modo local. Revise o trecho FIREBASE_CONFIG_TEXT no arquivo.');
+  }else if(cfg){
+    $('#fbConfig').value='';
+    $('#fbConfig').placeholder='Configuração já gravada no arquivo — nada a fazer aqui.';
     connectFirebase(cfg,true);
   }
+ }catch(e){
+  avisoConfig('Erro ao iniciar: '+(e&&e.message?e.message:e)+'. Se você acabou de colar a configuração, revise o trecho FIREBASE_CONFIG_TEXT.');
+  console.error(e);
+ }
 })();
 </script>
 </body>
