@@ -14,6 +14,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<!-- configuração do Firebase: fica num arquivo à parte para sobreviver às atualizações -->
+<script src="config.js" onerror="window.__semConfigJs=true"></script>
 <style>
 :root{
   --court:#16283A;--court-2:#1E344B;--line:#2C3C4D;
@@ -745,7 +747,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11e';
+const APP_VER='2026-09-11f';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -842,7 +844,7 @@ function freshState(){
     draft:{date:toISO(ref),primeiroDia:false,teste:false,serve:0,queue:[],swaps:[],
       Q1:{lineup:FIXOS.slice(0,5),scores:blankScores()},
       Q2:{lineup:FIXOS.slice(5,10),scores:blankScores()}},
-    sessions:[], pending:[], viewMonth:null
+    sessions:[], pending:[], drafts:{}, viewMonth:null
   };
 }
 let S=freshState();
@@ -1221,30 +1223,63 @@ function mesclarOficial(){
   });
 }
 function wednesdayList(){
-  /* todas as quartas com rodada salva + 10 semanas atrás e 6 à frente de hoje */
+  /* cobre da primeira rodada registrada até 6 semanas à frente, sem buracos,
+     para que qualquer quarta passada possa ser aberta e lançada */
   const set=new Set(S.sessions.map(s=>s.iso).filter(Boolean));
+  Object.keys(S.drafts||{}).forEach(k=>set.add(k));
   const hoje=refWednesday(new Date());
-  for(let k=-10;k<=6;k++){const d=new Date(hoje);d.setDate(d.getDate()+k*7);set.add(toISO(d));}
+  const isos=[...set].sort();
+  let ini=isos.length?fromISO(isos[0]):new Date(hoje);
+  const limite=new Date(hoje); limite.setDate(limite.getDate()-12*7);
+  if(ini>limite)ini=limite;
+  const fim=new Date(hoje); fim.setDate(fim.getDate()+6*7);
+  for(let d=refWednesday(ini); d<=fim; d.setDate(d.getDate()+7))set.add(toISO(d));
   set.add(S.draft.date);
   return[...set].sort();
 }
 function renderDateSelect(){
   const list=wednesdayList(), sel=$('#sessDate');
+  const hojeIso=toISO(refWednesday(new Date()));
   sel.innerHTML=list.map(iso=>{
-    const s=savedForDate(iso);
+    const s=sessaoDaData(iso);
     const d=fromISO(iso).toLocaleDateString('pt-BR');
     let tag='';
-    if(s){const p=periodOf(s);tag=p.tipo==='etapa'?' · rodada '+((sessoesNovas().findIndex(x=>x.iso===iso)%RODADAS_POR_ETAPA)+1)+' ✓':' · salva ✓';}
-    else if(iso===toISO(refWednesday(new Date())))tag=' · hoje';
+    if(s&&rodadaCompleta(s)){
+      const p=periodOf(s);
+      tag=p.tipo==='etapa'?' · rodada '+((sessoesNovas().findIndex(x=>x.iso===iso)%RODADAS_POR_ETAPA)+1)+' ✓':' · salva ✓';
+    }else if(s){
+      let n=0;['Q1','Q2'].forEach(q=>sanearScores(s[q]&&s[q].scores).forEach(x=>{if(x[0]!=null)n++;}));
+      tag=` · ${n}/10 lançados`;
+    }else if(iso===hojeIso)tag=' · hoje';
+    else if(iso<hojeIso)tag=' · sem lançamento';
     return `<option value="${iso}" ${iso===S.draft.date?'selected':''}>${d}${tag}</option>`;
   }).join('');
   const i=list.indexOf(S.draft.date);
   $('#prevWk').disabled=i<=0; $('#nextWk').disabled=i<0||i>=list.length-1;
 }
+/* cada quarta tem o seu próprio rascunho — navegar não mistura placares */
+function novoRascunho(iso){
+  const d=freshState().draft;
+  d.date=iso;
+  const fix=S.players.fixos.slice(0,10);
+  const pool=fix.length>=10?fix:fix.concat(S.players.suplentes).slice(0,10);
+  d.Q1.lineup=pool.slice(0,5); d.Q2.lineup=pool.slice(5,10);
+  return d;
+}
+function trocarData(novo){
+  if(!novo)return;
+  S.drafts=S.drafts||{};
+  if(novo===S.draft.date){renderAll();return;}
+  S.drafts[S.draft.date]=S.draft;
+  const salvo=S.drafts[novo];
+  S.draft=salvo?sanearDraft(salvo):novoRascunho(novo);
+  S.draft.date=novo;
+  save(); renderAll();
+}
 function stepWeek(dir){
   const list=wednesdayList(), i=list.indexOf(S.draft.date);
   if(i<0)return; const j=i+dir; if(j<0||j>=list.length)return;
-  S.draft.date=list[j]; save(); renderAll();
+  trocarData(list[j]);
 }
 function renderRodadaMode(){
   const s=savedForDate();
@@ -1252,7 +1287,19 @@ function renderRodadaMode(){
   $('#liveTools').style.display=live?'':'none';
   $('#liveActions').style.display=live?'':'none';
   const bn=$('#savedBanner');
-  if(live){bn.innerHTML='';return;}
+  if(live){
+    const hoje=toISO(refWednesday(new Date()));
+    const parcial=sessaoDaData();
+    if(S.draft.date<hoje){
+      let n=0; if(parcial)['Q1','Q2'].forEach(q=>sanearScores(parcial[q]&&parcial[q].scores).forEach(x=>{if(x[0]!=null)n++;}));
+      bn.innerHTML=`<div class="savedbar" style="border-left-color:var(--muted)"><span class="ic">🕘</span>
+        <span class="tx"><b>Quarta passada</b> — ${fromISO(S.draft.date).toLocaleDateString('pt-BR')}
+          <div class="sub">${n?`${n} de 10 jogos lançados. Complete os que faltam.`:'Nenhum resultado lançado nesta data. Você pode montar as quadras e lançar agora.'}</div></span>
+        <button class="btn btn-ghost btn-sm" id="goToday" style="width:auto">Ir para a rodada atual</button></div>`;
+      ligaGoToday();
+    }else bn.innerHTML='';
+    return;
+  }
   const p=periodOf(s);
   const idx=sessoesNovas().findIndex(x=>x.iso===s.iso);
   const rot=p.tipo==='etapa'?`${p.label} · rodada ${(Math.max(0,idx)%RODADAS_POR_ETAPA)+1} de ${RODADAS_POR_ETAPA}`:p.label;
@@ -1261,12 +1308,15 @@ function renderRodadaMode(){
     <span class="tx"><b>Rodada já salva</b> — ${rot}${s.teste?' · teste':''}
       <div class="sub">Resultados abaixo, como foram lançados. Para corrigir, use o botão Editar na aba Histórico.</div>${sw}</span>
     <button class="btn btn-ghost btn-sm" id="goToday" style="width:auto">Ir para a rodada atual</button></div>`;
-  $('#goToday').onclick=()=>{
+  ligaGoToday();
+}
+function ligaGoToday(){
+  const b=$('#goToday'); if(!b)return;
+  b.onclick=()=>{
     const list=wednesdayList();
     const livres=list.filter(x=>!savedForDate(x));
     const hoje=toISO(refWednesday(new Date()));
-    S.draft.date=livres.includes(hoje)?hoje:(livres.find(x=>x>=hoje)||livres[livres.length-1]||hoje);
-    save();renderAll();
+    trocarData(livres.includes(hoje)?hoje:(livres.find(x=>x>=hoje)||livres[livres.length-1]||hoje));
   };
 }
 function btnJogo(q,i,pronto){
@@ -1511,8 +1561,8 @@ function renderMasterBox(){
   const ver=`<div class="verline">versão do arquivo: <b>${APP_VER}</b></div>`;
   if(!fb.connected){
     el.innerHTML=`<div class="synccard"><h3>🔑 Acesso master</h3>
-      <div class="diag erro"><b>Diagnóstico:</b> o app está em <b>modo local</b> — não conectou ao Firebase, então não há login nem acesso master.
-      Revise o trecho <code>FIREBASE_CONFIG_TEXT</code> no arquivo (Parte 2 do guia) e confira se a linha <code>databaseURL</code> está lá.</div>${ver}</div>`;
+      <div class="diag erro"><b>Diagnóstico:</b> o app está em <b>modo local</b> — não conectou ao Firebase.
+      ${window.__semConfigJs?'Não encontrei o arquivo <code>config.js</code> ao lado do <code>index.html</code>. É nele que a configuração do Firebase deve ficar (assim ela sobrevive às atualizações).':'O <code>config.js</code> existe mas a configuração dentro dele não foi entendida — confira se a linha <code>databaseURL</code> está lá.'}</div>${ver}</div>`;
     return;
   }
   if(!AUTH.user){
@@ -1727,7 +1777,7 @@ $$('.tab').forEach(t=>t.onclick=()=>{
   window.scrollTo({top:0,behavior:'smooth'});
 });
 $('#rodadaTeste').onchange=e=>{S.draft.teste=e.target.checked;save();renderHeader();};
-$('#sessDate').onchange=e=>{S.draft.date=e.target.value;save();renderAll();};
+$('#sessDate').onchange=e=>trocarData(e.target.value);
 $('#prevWk').onclick=()=>stepWeek(-1);
 $('#nextWk').onclick=()=>stepWeek(1);
 $('#monthSel').onchange=e=>{S.viewMonth=e.target.value;save();renderClassif();renderTitulos();};
@@ -2082,12 +2132,22 @@ function avisoConfig(msg){
   renderAll();
   /* a config gravada no arquivo tem prioridade — é o que faz todo mundo
      enxergar o mesmo placar pelo mesmo link */
-  let cfg=null, erroCfg=null;
-  const txt=(typeof FIREBASE_CONFIG_TEXT==='string')?FIREBASE_CONFIG_TEXT:'';
-  if(txt.trim()&&txt.indexOf('COLE_AQUI')<0){
-    try{cfg=parseConfig(txt);}catch(e){erroCfg=e.message;}
+  let cfg=null, erroCfg=null, origem='';
+  const candidatos=[
+    ['config.js', (typeof window.SUPER_QUARTA_CONFIG==='string')?window.SUPER_QUARTA_CONFIG:''],
+    ['arquivo',   (typeof FIREBASE_CONFIG_TEXT==='string')?FIREBASE_CONFIG_TEXT:'']
+  ];
+  for(const [nome,txt] of candidatos){
+    if(!txt||!txt.trim()||txt.indexOf('COLE_AQUI')>=0)continue;
+    try{cfg=parseConfig(txt);origem=nome;break;}catch(e){erroCfg=e.message;}
   }
-  if(!cfg&&!erroCfg)cfg=local.get(CFGKEY);
+  /* guarda uma cópia: se um dia a configuração sumir do arquivo, o app continua conectado */
+  if(cfg)local.set(CFGKEY,cfg);
+  else{
+    const salvo=local.get(CFGKEY);
+    if(salvo){cfg=salvo;origem='cópia salva neste navegador';erroCfg=null;}
+  }
+  window.__cfgOrigem=origem;
   if(erroCfg){
     avisoConfig('Não consegui ler a configuração do Firebase: '+erroCfg+
       '. O sistema segue em modo local. Revise o trecho FIREBASE_CONFIG_TEXT no arquivo.');
