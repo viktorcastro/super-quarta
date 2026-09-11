@@ -769,7 +769,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11l';
+const APP_VER='2026-09-11n';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -896,7 +896,7 @@ let S=freshState();
    IMPORTANTE: esconder botões não protege nada. Quem garante a permissão são
    as regras do Firebase, que checam o uid contra a lista admins/.
    ============================================================================ */
-let fb={app:null,db:null,auth:null,refs:{},connected:false};
+let fb={app:null,db:null,auth:null,refs:{},connected:false,ouvindo:false};
 let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false,erroLogin:null};
 /* trilha do que acontece no login — some a dúvida sobre onde trava */
 const LOG=[];
@@ -912,6 +912,62 @@ function setSync(state,label){
   const l=document.querySelector('#syncLabel'); if(l)l.textContent=label;
   const st=document.querySelector('#fbStatus');
   if(st)st.textContent=state==='live'?'Sincronizado — todos veem o mesmo placar':'Modo local — dados só neste navegador';
+}
+function ligarListeners(){
+  if(!fb.connected||fb.ouvindo)return;
+  fb.ouvindo=true; reg('ligando leitura dos dados…');
+  /* banco vazio NÃO apaga o que existe localmente — pelo contrário, sobe */
+  fb.refs.sessions.on('value',s=>{
+    setSync('live','Sincronizado');       /* leitura passou: limpa erro anterior */
+    const v=s.val();
+    const remoto=Array.isArray(v)?v.filter(Boolean):(v?Object.values(v):[]);
+    remotoVazio.sessions=remoto.length===0;
+    if(!remoto.length&&S.sessions.length){talvezSemear();return;}
+    const j=JSON.stringify(remoto);
+    if(j===lastSess)return; lastSess=j;
+    applyingRemote=true; S.sessions=remoto.map(sanearSessao).filter(Boolean); applyingRemote=false;
+    if(!isTyping())renderAll();
+  },e=>{reg('leitura de sessions recusada: '+((e&&e.message)||e));setSync('err','Erro de sync');});
+
+  fb.refs.live.on('value',s=>{
+    const v=s.val();
+    remotoVazio.live=!v;
+    if(!v){talvezSemear();return;}
+    const j=JSON.stringify(v); if(j===lastLive)return; lastLive=j;
+    applyingRemote=true;
+    if(v.players)S.players={fixos:limpaLista(v.players.fixos),suplentes:limpaLista(v.players.suplentes)};
+    if(v.draft)S.draft=sanearDraft(v.draft);
+    applyingRemote=false;
+    if(!isTyping())renderAll();
+  });
+
+  fb.refs.pending.on('value',s=>{
+    const v=s.val()||{};
+    S.pending=Object.entries(v).map(([id,x])=>{
+      const it=Object.assign({id},x);
+      it.byName=limpaNome(it.byName)||'anônimo';
+      if(it.session)it.session=sanearSessao(it.session);
+      if(it.tipo==='jogo'){
+        it.placar=[(it.placar&&it.placar[0])??null,(it.placar&&it.placar[1])??null];
+        it.lineup=sanearLado({lineup:it.lineup}).lineup;
+      }
+      return it;
+    });
+    renderAll();
+  });
+
+  fb.refs.admins.on('value',s=>{
+    setSync('live','Sincronizado');
+    AUTH.admins=s.val()||{}; AUTH.adminsErro=null; AUTH.adminsLido=true;
+    AUTH.isAdmin=!!(AUTH.user&&AUTH.admins[AUTH.user.uid]===true);
+    talvezSemear(); renderAuth(); renderAll();
+  },e=>{AUTH.adminsErro=(e&&e.message)||'sem permissão de leitura';AUTH.adminsLido=true;reg('leitura de admins recusada: '+AUTH.adminsErro);renderAll();});
+}
+function desligarListeners(){
+  setSync('','Conectado — faça login');
+  if(!fb.ouvindo)return;
+  ['sessions','live','pending','admins'].forEach(k=>{try{fb.refs[k].off();}catch(e){}});
+  fb.ouvindo=false; reg('leitura dos dados desligada');
 }
 function connectFirebase(cfg,silent){
   if(!window.firebase||!firebase.database){if(!silent)toast('Firebase não carregou. Segue em modo local.');return false;}
@@ -932,50 +988,9 @@ function connectFirebase(cfg,silent){
     };
     fb.connected=true; local.set(CFGKEY,cfg);
 
-    /* banco vazio NÃO apaga o que existe localmente — pelo contrário, sobe */
-    fb.refs.sessions.on('value',s=>{
-      const v=s.val();
-      const remoto=Array.isArray(v)?v.filter(Boolean):(v?Object.values(v):[]);
-      remotoVazio.sessions=remoto.length===0;
-      if(!remoto.length&&S.sessions.length){talvezSemear();return;}
-      const j=JSON.stringify(remoto);
-      if(j===lastSess)return; lastSess=j;
-      applyingRemote=true; S.sessions=remoto.map(sanearSessao).filter(Boolean); applyingRemote=false;
-      if(!isTyping())renderAll();
-    },()=>setSync('err','Erro de sync'));
-
-    fb.refs.live.on('value',s=>{
-      const v=s.val();
-      remotoVazio.live=!v;
-      if(!v){talvezSemear();return;}
-      const j=JSON.stringify(v); if(j===lastLive)return; lastLive=j;
-      applyingRemote=true;
-      if(v.players)S.players={fixos:limpaLista(v.players.fixos),suplentes:limpaLista(v.players.suplentes)};
-      if(v.draft)S.draft=sanearDraft(v.draft);
-      applyingRemote=false;
-      if(!isTyping())renderAll();
-    });
-
-    fb.refs.pending.on('value',s=>{
-      const v=s.val()||{};
-      S.pending=Object.entries(v).map(([id,x])=>{
-        const it=Object.assign({id},x);
-        it.byName=limpaNome(it.byName)||'anônimo';
-        if(it.session)it.session=sanearSessao(it.session);
-        if(it.tipo==='jogo'){
-          it.placar=[(it.placar&&it.placar[0])??null,(it.placar&&it.placar[1])??null];
-          it.lineup=sanearLado({lineup:it.lineup}).lineup;
-        }
-        return it;
-      });
-      renderAll();
-    });
-
-    fb.refs.admins.on('value',s=>{
-      AUTH.admins=s.val()||{}; AUTH.adminsErro=null; AUTH.adminsLido=true;
-      AUTH.isAdmin=!!(AUTH.user&&AUTH.admins[AUTH.user.uid]===true);
-      talvezSemear(); renderAuth(); renderAll();
-    },e=>{AUTH.adminsErro=(e&&e.message)||'sem permissão de leitura';AUTH.adminsLido=true;renderAll();});
+    /* Os listeners NÃO são ligados aqui. Com a regra ".read: auth != null",
+       uma leitura feita antes do login é recusada e o Firebase CANCELA o listener
+       de vez — ele não tenta de novo. Por isso só ligamos depois de autenticar. */
 
     if(fb.auth){
       /* retorno do login por redirecionamento */
@@ -991,6 +1006,7 @@ function connectFirebase(cfg,silent){
         AUTH.isAdmin=!!(u&&AUTH.admins[u.uid]===true);
         if(u)AUTH.erroLogin=null;
         try{renderGate();}catch(e){reg('ERRO ao desenhar o portão: '+((e&&e.message)||e));}
+        if(u)ligarListeners(); else desligarListeners();
         talvezSemear(); renderAuth(); renderAll();
       });
     }
