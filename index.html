@@ -248,6 +248,14 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .prev .tagq.q2{background:var(--muted)}
 .prev b{font-weight:700}
 .prev.warn{border-left-color:var(--down)}
+.corr-q{margin-bottom:14px}
+.corr-h{font-family:'Bricolage Grotesque';font-weight:800;font-size:13px;color:var(--court);border-bottom:2px solid var(--court);padding-bottom:5px;margin-bottom:8px}
+.corr-l{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.corr-l span{font-size:10px;font-weight:800;color:var(--muted);width:20px;flex:none}
+.corr-l select{flex:1;min-width:0;padding:9px 10px;border:1px solid #d5ddd6;border-radius:9px;font-family:'Inter';font-size:15px;font-weight:600;background:#fff}
+.sortline{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e9e4;border-left:3px solid var(--ball);border-radius:11px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--muted);box-shadow:var(--shadow)}
+.sortline span{color:var(--ink);font-weight:600}
+.sd-sort{margin-bottom:10px;font-size:12px}
 .swaplog{background:#fff;border:1px solid #e3e9e4;border-radius:11px;padding:11px 14px;margin-bottom:14px;font-size:12.5px;box-shadow:var(--shadow)}
 .swaplog .t{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px}
 .swaplog .it{display:flex;align-items:center;gap:7px;padding:3px 0;flex-wrap:wrap}
@@ -488,6 +496,7 @@ body.travado{overflow:hidden}
         <button class="btn btn-court" id="openDraw" style="flex:1;min-width:200px">🎲 Sortear confrontos da rodada</button>
         <button class="btn btn-ghost" id="openAbsence" style="flex:1;min-width:200px">🔁 Registrar falta / substituição</button>
       </div>
+      <div id="sorteioInfo"></div>
       <div id="swapLog"></div>
       <div id="restrNote"></div>
       <div style="margin-bottom:14px"><label class="toggle"><input type="checkbox" id="rodadaTeste"><span class="sw"></span> <span class="tgl-full">Rodada de teste (fica no histórico mas não conta para a etapa)</span><span class="tgl-mini">Rodada de teste</span></label></div>
@@ -691,7 +700,7 @@ body.travado{overflow:hidden}
     <div class="mh"><div class="modal-badge"></div><h3 id="drawTitle">Sortear confrontos</h3></div>
     <div class="mb">
       <div id="drawAsk">
-        <p>O sorteio mantém quem subiu e quem desceu de quadra, embaralha a ordem do rodízio e define as duplas que começam sacando. Na primeira quarta do mês, sorteia também as quadras.</p>
+        <p>O sorteio é 100% aleatório entre os 10 participantes: sorteia as quadras, a ordem do rodízio e as duplas que começam sacando. Restrições de horário são respeitadas.</p>
         <div class="q">Algum jogador tem restrição de horário?</div>
         <div class="mf">
           <button class="btn btn-primary" id="drawNo">Não, sortear normal</button>
@@ -723,7 +732,7 @@ body.travado{overflow:hidden}
   <div class="modal">
     <div class="mh"><div class="modal-badge"></div><h3>Falta e substituição</h3></div>
     <div class="mb">
-      <p>Vaga na Quadra 1 se conquista em quadra. Quem entra no lugar de um faltante da Q1 começa pela <b>Quadra 2</b>, e o próximo da fila de acesso sobe para a Q1.</p>
+      <p>Quem entra assume a vaga de quem faltou. Como as quadras são sorteadas do zero toda semana, não há vantagem nem prejuízo — se quiser, sorteie de novo depois da troca.</p>
       <div class="rest-form">
         <label class="flab">Quem faltou</label>
         <select id="absOut"></select>
@@ -734,6 +743,20 @@ body.travado{overflow:hidden}
       <div class="mf">
         <button class="btn btn-primary" id="absGo">Aplicar substituição</button>
         <button class="btn btn-ghost" id="absCancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="corrModal">
+  <div class="modal">
+    <div class="mh"><div class="modal-badge"></div><h3 id="corrTitulo">Corrigir escalação</h3></div>
+    <div class="mb">
+      <p>Esta rodada ficou com jogadores faltando. Indique quem jogou em cada quadra — os placares e os pontos não mudam.</p>
+      <div id="corrBody"></div>
+      <div class="mf" style="margin-top:14px">
+        <button class="btn btn-primary" id="corrOk">Salvar escalação</button>
+        <button class="btn btn-ghost" id="corrCancel">Cancelar</button>
       </div>
     </div>
   </div>
@@ -769,7 +792,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-11n';
+const APP_VER='2026-09-22a';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -789,6 +812,14 @@ const SUPLENTES=["Bruno","Matheus","Casas","Jader","Diogo","Ranieri","Ramsés"];
 const SCHED=[{a:[0,1],b:[2,3],out:4},{a:[0,2],b:[1,4],out:3},{a:[0,3],b:[2,4],out:1},{a:[0,4],b:[1,3],out:2},{a:[1,2],b:[3,4],out:0}];
 /* padrões de saque: cada jogador começa sacando exatamente 2x (verificado por força bruta) */
 const SERVE=[['a','a','b','b','b'],['b','b','a','a','a']];
+function fmtSorteio(iso,quem){
+  if(!iso)return '';
+  const d=new Date(iso); if(isNaN(d))return '';
+  const dia=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  return `Sorteio realizado em ${dia} às ${hora}`+(quem?` por ${esc(quem)}`:'');
+}
+function nomeOu(v){return (v&&String(v).trim())?v:'—';}
 function padraoSaque(n){const i=Number(n);return SERVE[(Number.isFinite(i)&&i>=0&&i<SERVE.length)?i:0];}
 const PTS_Q1={1:7,2:5,3:4,4:3,5:2}, PTS_Q2={1:6,2:4,3:3,4:2,5:1}; /* modelo antigo, mantido p/ o histórico */
 /* modelo atual: cada jogo distribui 5 pontos entre os dois lados */
@@ -852,7 +883,9 @@ function sanearLado(q,padrao){
   const lu=[];
   for(let i=0;i<5;i++){
     const v=q&&q.lineup?(q.lineup[i]||q.lineup[String(i)]):null;
-    lu.push(limpaNome(v)||(padrao&&padrao[i])||('Jogador '+(i+1)));
+    /* NUNCA inventar nome aqui: um nome falso gravado se espalha pelo resto do sistema.
+       Vazio continua vazio e a tela mostra um traço. */
+    lu.push(limpaNome(v)||(padrao&&padrao[i])||'');
   }
   return{lineup:lu,scores:sanearScores(q&&q.scores)};
 }
@@ -1123,10 +1156,17 @@ function sessaoOficial(iso,modelo){
 /* grava um único jogo na rodada oficial */
 function aplicarJogo(p){
   const s=sessaoOficial(p.iso,{modo:p.modo,teste:p.teste,serve:p.serve});
-  if(!s[p.quadra].lineup.length||s[p.quadra].lineup.some(x=>!x))s[p.quadra].lineup=(p.lineup||[]).slice(0,5);
+  const completa=a=>Array.isArray(a)&&a.length===5&&a.every(x=>x&&String(x).trim());
+  if(!completa(s[p.quadra].lineup))s[p.quadra].lineup=(p.lineup||[]).slice(0,5);
+  /* grava também a outra quadra, se veio junto — evita a rodada nascer pela metade */
+  ['Q1','Q2'].forEach(q=>{
+    const vinda=p['lineup'+q];
+    if(!completa(s[q].lineup)&&completa(vinda))s[q].lineup=vinda.slice(0,5);
+  });
   s[p.quadra].scores=sanearScores(s[p.quadra].scores);
   s[p.quadra].scores[p.jogo]=[p.placar[0],p.placar[1]];
   if(p.serve!=null)s.serve=p.serve;
+  if(p.sorteioEm&&!s.sorteioEm){s.sorteioEm=p.sorteioEm;s.sorteioPor=p.sorteioPor||'';}
   return s;
 }
 /* envia UM jogo — master grava direto, os demais mandam para a fila */
@@ -1135,7 +1175,9 @@ function enviarJogo(q,i){
   if(sc[0]==null||sc[1]==null){toast('Preencha os dois placares do jogo '+(i+1));return;}
   const p={tipo:'jogo',iso:S.draft.date,date:fromISO(S.draft.date).toLocaleDateString('pt-BR'),
            quadra:q,jogo:i,placar:[sc[0],sc[1]],lineup:d.lineup.slice(),
-           serve:S.draft.serve,modo:MODO,teste:!!S.draft.teste};
+           lineupQ1:S.draft.Q1.lineup.slice(),lineupQ2:S.draft.Q2.lineup.slice(),
+           serve:S.draft.serve,modo:MODO,teste:!!S.draft.teste,
+           sorteioEm:S.draft.sorteioEm||null,sorteioPor:S.draft.sorteioPor||''};
   if(!fb.connected||AUTH.isAdmin){
     aplicarJogo(p); save(); renderAll();
     toast(`Jogo ${i+1} da ${q==='Q1'?'Quadra 1':'Quadra 2'} registrado ✓`);
@@ -1452,7 +1494,7 @@ function renderCourts(){
           <input class="mono ${ow?'win':''} ${trava?'trav':''}" ${trava?'disabled':''} inputmode="numeric" pattern="[0-9]*" maxlength="1" data-q="${q}" data-m="${i}" data-s="${oI}" value="${go==null?'':go}">
         </div>
         <div class="team r">${temPts?`<span class="mp">+${po}</span>`:''}${nameO}</div>
-      </div><div class="folga"><span>jogo ${i+1} · fora: <b>${esc(d.lineup[m.out])}</b></span>${btnJogo(q,i,temPts)}</div>`;
+      </div><div class="folga"><span>jogo ${i+1} · fora: <b>${esc(nomeOu(d.lineup[m.out]))}</b></span>${btnJogo(q,i,temPts)}</div>`;
     }).join('');
     const standHtml=rows.map((r,i)=>`<tr class="${i===0?'r1':''}"><td class="pos">${i+1}</td><td class="l nm">${esc(r.p)}</td>
       <td>${r.V}</td><td>${r.D}</td><td>${r.GP}</td><td>${r.GC}</td>
@@ -1521,7 +1563,8 @@ function renderTitulos(){
 function sessionDetail(s){
   s=sanearSessao(s); if(!s)return '';
   const pattern=padraoSaque(s.serve);
-  return `<div class="sd-wrap">`+['Q1','Q2'].map(q=>{
+  const cab=fmtSorteio(s.sorteioEm,s.sorteioPor);
+  return (cab?`<div class="sortline sd-sort">🎲 <span>${cab}</span></div>`:'')+`<div class="sd-wrap">`+['Q1','Q2'].map(q=>{
     const d=s[q], q2=(s.primeiroDia||q==='Q2');
     const{rows}=courtRows(s,q);
     const matches=SCHED.map((m,i)=>{
@@ -1537,7 +1580,7 @@ function sessionDetail(s){
         <div class="sd-team ${sw?'w':''}"><span class="sv"></span>${d.lineup[srvT[0]]} <small>&</small> ${d.lineup[srvT[1]]}${temPts?`<span class="mp">+${ps}</span>`:''}</div>
         <div class="sd-sc"><b class="${sw?'w':''}">${gs==null?'–':gs}</b><i>×</i><b class="${ow?'w':''}">${go==null?'–':go}</b></div>
         <div class="sd-team r ${ow?'w':''}">${temPts?`<span class="mp">+${po}</span>`:''}${d.lineup[othT[0]]} <small>&</small> ${d.lineup[othT[1]]}</div>
-      </div><div class="sd-folga">jogo ${i+1} · fora: <b>${esc(d.lineup[m.out])}</b></div>`;
+      </div><div class="sd-folga">jogo ${i+1} · fora: <b>${esc(nomeOu(d.lineup[m.out]))}</b></div>`;
     }).join('');
     const tab=rows.map((r,i)=>`<tr><td class="pos">${i+1}</td><td class="l nm">${esc(r.p)}${S.players.suplentes.includes(r.p)?' <span class="sdsup">sup</span>':''}</td>
       <td>${r.V}</td><td>${r.D}</td><td>${r.GP}</td><td>${r.GC}</td>
@@ -1548,6 +1591,44 @@ function sessionDetail(s){
       <table class="sd-tab"><thead><tr><th>#</th><th class="l">Jogador</th><th>V</th><th>D</th><th>GP</th><th>GC</th><th>SG</th><th>Pt</th></tr></thead><tbody>${tab}</tbody></table>
     </div>`;
   }).join('')+`</div>`;
+}
+function escalacaoFurada(s){
+  if(!s)return false;
+  return ['Q1','Q2'].some(q=>{
+    const l=(s[q]&&s[q].lineup)||[];
+    return l.length!==5||l.some(x=>!x||!String(x).trim()||/^Jogador \d$/.test(x));
+  });
+}
+function abrirCorrigir(i){
+  if(!podeEditarOficial()){toast('Somente o master corrige escalação');return;}
+  CORRIGE=i; const s=S.sessions[i]; if(!s)return;
+  const todos=[...S.players.fixos,...S.players.suplentes];
+  $('#corrTitulo').textContent='Escalação de '+(s.date||s.iso);
+  $('#corrBody').innerHTML=['Q1','Q2'].map(q=>{
+    const l=(s[q]&&s[q].lineup)||[];
+    return `<div class="corr-q"><div class="corr-h">${q==='Q1'?'Quadra 1':'Quadra 2'}</div>
+      ${[0,1,2,3,4].map(k=>{
+        const atual=l[k]||'';
+        const valido=todos.includes(atual)?atual:'';
+        return `<div class="corr-l"><span>J${k+1}</span>
+          <select data-corr="${q}:${k}"><option value="">— escolher —</option>
+          ${todos.map(p=>`<option value="${esc(p)}" ${p===valido?'selected':''}>${esc(p)}</option>`).join('')}
+          </select></div>`;
+      }).join('')}</div>`;
+  }).join('');
+  $('#corrModal').classList.add('show');
+}
+function salvarCorrecao(){
+  const s=S.sessions[CORRIGE]; if(!s)return;
+  const novo={Q1:[],Q2:[]};
+  $$('[data-corr]').forEach(sel=>{const[q,k]=sel.dataset.corr.split(':');novo[q][+k]=sel.value;});
+  const falta=['Q1','Q2'].some(q=>novo[q].some(x=>!x));
+  if(falta){toast('Preencha os 10 jogadores');return;}
+  const rep=['Q1','Q2'].flatMap(q=>novo[q]);
+  if(new Set(rep).size!==10){toast('Há jogador repetido');return;}
+  s.Q1.lineup=novo.Q1; s.Q2.lineup=novo.Q2;
+  $('#corrModal').classList.remove('show');
+  save(); renderAll(); toast('Escalação corrigida ✓');
 }
 function sessionLabel(s){
   const p=periodOf(s);
@@ -1582,17 +1663,19 @@ function renderSessoes(){
   const sorted=[...S.sessions].map((s,i)=>({s,i})).sort((a,b)=>(b.s.iso||'').localeCompare(a.s.iso||''));
   list.innerHTML=sorted.map(({s,i})=>{
     const ri=roundInfo(s.iso);
-    const sw=(s.swaps&&s.swaps.length)?`<div class="w" style="color:var(--ball-deep)">${s.swaps.map(x=>x.inn+' por '+x.out+(x.up?' ('+x.up+' subiu)':'')).join(' \u00b7 ')}</div>`:'';
+    const sw=(s.swaps&&s.swaps.length)?`<div class="w" style="color:var(--ball-deep)">${s.swaps.map(x=>esc(x.inn)+' por '+esc(x.out)).join(' \u00b7 ')}</div>`:'';
     return `<div class="sess-row">
       <div class="n">${ri.n||'?'}</div>
       <div class="meta"><div class="d">${esc(s.date||s.iso)}${s.teste?' <span class="sdsup">teste</span>':''}</div>
         <div class="w">${sessionLabel(s)}</div>${sw}</div>
       <div class="who"><b>Q1:</b> ${s.Q1.lineup.join(', ')}<br><b>Q2:</b> ${s.Q2.lineup.join(', ')}</div>
+      ${escalacaoFurada(s)?`<button class="btn btn-primary btn-sm" data-corr-open="${i}">Corrigir escalação</button>`:''}
       <button class="btn btn-ghost btn-sm" data-see="${i}">Ver jogos</button>
       <button class="btn btn-ghost btn-sm" data-edit="${i}">Editar</button>
       <button class="btn btn-danger btn-sm" data-del="${i}">Apagar</button>
     </div><div class="sd" id="sd-${i}" hidden></div>`;
   }).join('');
+  $$('[data-corr-open]').forEach(b=>b.onclick=()=>abrirCorrigir(+b.dataset.corrOpen));
   $$('[data-edit]').forEach(b=>b.onclick=()=>editSession(+b.dataset.edit));
   $$('[data-see]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.see, box=$('#sd-'+i);
@@ -1725,7 +1808,7 @@ function renderAprov(){
           <span class="lado"><b>${L[sT[0]]} & ${L[sT[1]]}</b> <i>+${qs}</i></span>
           <span class="pl">${ps} × ${po}</span>
           <span class="lado r"><i>+${qo}</i> <b>${L[oT[0]]} & ${L[oT[1]]}</b></span></div>
-        <div class="pjogo-sub">jogo ${p.jogo+1} · fora: ${esc(L[m.out])}</div>
+        <div class="pjogo-sub">jogo ${p.jogo+1} · fora: ${esc(nomeOu(L[m.out]))}</div>
         <div class="acts">
           <button class="btn btn-primary btn-sm" data-ap="${p.id}">Aprovar jogo</button>
           <button class="btn btn-danger btn-sm" data-rj="${p.id}">Recusar</button>
@@ -1830,7 +1913,7 @@ function avisoRender(e){
     '. Recarregue a página; se persistir, me envie esta mensagem.</span>';
   w.insertBefore(d,w.firstChild);
 }
-function renderAllInterno(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderRestrNote();renderRodadaMode();renderAprov();renderMasterBox();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
+function renderAllInterno(){renderHeader();renderCourts();renderClassif();renderTitulos();renderSessoes();renderPlayers();renderSwapLog();renderSorteioInfo();renderRestrNote();renderRodadaMode();renderAprov();renderMasterBox();renderPermissoes();$('#rodadaTeste').checked=!!S.draft.teste;}
 
 /* ================= sorteio ================= */
 let pendingRest=[];
@@ -1883,8 +1966,10 @@ function doDraw(restrictions){
   S.draft.Q1.lineup=plano.courts[0]; S.draft.Q2.lineup=plano.courts[1];
   S.draft.serve=Math.floor(Math.random()*SERVE.length);
   S.draft.restr=plano.aplicadas.map(a=>({player:a.player,type:a.type,court:'Q'+(a.court+1)}));
+  S.draft.sorteioEm=new Date().toISOString();
+  S.draft.sorteioPor=(AUTH.user&&AUTH.user.name)||'';
   ['Q1','Q2'].forEach(q=>S.draft[q].scores=blankScores());
-  save(); renderCourts(); renderRestrNote();
+  save(); renderCourts(); renderSorteioInfo(); renderRestrNote();
   toast(plano.aplicadas.length?`Sorteado ✓ ${plano.aplicadas.length} restrição(ões) atendida(s)`:'Quadras e confrontos sorteados ✓');
   return{ok:true};
 }
@@ -1970,11 +2055,17 @@ function renderAbsPreview(){
     <div class="ln"><span class="tagq${pv.court==='Q2'?' q2':''}">${pv.court}</span><b>${esc(inn)}</b> entra no lugar de ${esc(out)}</div>
     <div class="ln" style="color:var(--muted)">As quadras são sorteadas do zero, então a posição não muda nada — sorteie de novo depois de trocar.</div></div>`;
 }
+function renderSorteioInfo(){
+  const el=$('#sorteioInfo'); if(!el)return;
+  const salva=savedForDate();
+  const txt=salva?'':fmtSorteio(S.draft.sorteioEm,S.draft.sorteioPor);
+  el.innerHTML=txt?`<div class="sortline">🎲 <span>${txt}</span></div>`:'';
+}
 function renderSwapLog(){
   const sw=S.draft.swaps||[], el=$('#swapLog');
   if(!sw.length){el.innerHTML='';return;}
   el.innerHTML=`<div class="swaplog"><div class="t">Substituições desta rodada</div>${sw.map(s=>
-    `<div class="it"><b>${s.inn}</b> entra por <b>${s.out}</b>${s.up?` <span class="ar">·</span> ${s.up} <span class="ar">▲</span> subiu para a Q1`:''}</div>`).join('')}</div>`;
+    `<div class="it"><b>${esc(s.inn)}</b> entra por <b>${esc(s.out)}</b> <span class="ar">·</span> ${s.court==='Q1'?'Quadra 1':'Quadra 2'}</div>`).join('')}</div>`;
 }
 $('#openAbsence').onclick=openAbsence;
 $('#absCancel').onclick=()=>$('#absModal').classList.remove('show');
@@ -1986,7 +2077,7 @@ $('#absGo').onclick=()=>{
   $('#absModal').classList.remove('show');
   if(!pv)return;
   renderAll();
-  toast(pv.up?`${esc(inn)} entra na Q2 · ${esc(pv.up)} sobe para a Q1`:`${esc(inn)} entra no lugar de ${esc(out)}`);
+  toast(`${esc(inn)} entra no lugar de ${esc(out)}`);
 };
 
 function applyPromotion(last){
@@ -2032,111 +2123,12 @@ function applyAbsence(out,inn){
   S.draft.swaps.push({out,inn,up:null,court:q});
   save(); return pv;
 }
-/* ---- falta / substituição ---- */
-function courtOf(p){return S.draft.Q1.lineup.includes(p)?'Q1':S.draft.Q2.lineup.includes(p)?'Q2':null;}
-function openAbsence(){
-  ensureQueue();
-  const playing=[...S.draft.Q1.lineup,...S.draft.Q2.lineup];
-  const avail=availablePlayers();
-  if(!avail.length){toast('Não há ninguém de fora disponível para entrar');return;}
-  $('#absOut').innerHTML=playing.map(p=>`<option value="${esc(p)}">${esc(p)} — ${courtOf(p)==='Q1'?'Quadra 1':'Quadra 2'}</option>`).join('');
-  $('#absIn').innerHTML=avail.map(p=>`<option value="${esc(p)}">${esc(p)}${S.players.suplentes.includes(p)?' · suplente':''}</option>`).join('');
-  renderAbsPreview(); $('#absModal').classList.add('show');
-}
-function renderAbsPreview(){
-  const out=$('#absOut').value, inn=$('#absIn').value;
-  const pv=previewAbsence(out,inn); const box=$('#absPreview');
-  if(!pv){box.innerHTML='';return;}
-  if(pv.tipo==='simples'){
-    box.innerHTML=`<div class="prev"><div class="hd">Como vai ficar</div>
-      <div class="ln"><span class="tagq q2">Q2</span><b>${esc(inn)}</b> entra no lugar de ${esc(out)}</div>
-      <div class="ln" style="color:var(--muted)">A Quadra 1 não muda.</div></div>`;
-  }else if(pv.tipo==='cascata'){
-    box.innerHTML=`<div class="prev"><div class="hd">Como vai ficar</div>
-      <div class="ln"><span class="tagq">Q1</span><b>${esc(pv.up)}</b> <span class="ar">▲</span> sobe da Q2 e ocupa a vaga de ${esc(out)}</div>
-      <div class="ln"><span class="tagq q2">Q2</span><b>${esc(inn)}</b> entra na vaga que o ${esc(pv.up)} deixou</div></div>`;
-  }else{
-    box.innerHTML=`<div class="prev warn"><div class="hd">Sem fila de acesso</div>
-      <div class="ln">Não há rodada anterior para definir quem sobe, então <b>${esc(inn)}</b> entra direto na Quadra 1 no lugar de ${esc(out)}.</div></div>`;
-  }
-}
-function renderSwapLog(){
-  const sw=S.draft.swaps||[], el=$('#swapLog');
-  if(!sw.length){el.innerHTML='';return;}
-  el.innerHTML=`<div class="swaplog"><div class="t">Substituições desta rodada</div>${sw.map(s=>
-    `<div class="it"><b>${s.inn}</b> entra por <b>${s.out}</b>${s.up?` <span class="ar">·</span> ${s.up} <span class="ar">▲</span> subiu para a Q1`:''}</div>`).join('')}</div>`;
-}
-$('#openAbsence').onclick=openAbsence;
-$('#absCancel').onclick=()=>$('#absModal').classList.remove('show');
-$('#absModal').onclick=e=>{if(e.target.id==='absModal')$('#absModal').classList.remove('show');};
-$('#absOut').onchange=renderAbsPreview; $('#absIn').onchange=renderAbsPreview;
-$('#absGo').onclick=()=>{
-  const out=$('#absOut').value, inn=$('#absIn').value;
-  const pv=applyAbsence(out,inn);
-  $('#absModal').classList.remove('show');
-  if(!pv)return;
-  renderAll();
-  toast(pv.up?`${esc(inn)} entra na Q2 · ${esc(pv.up)} sobe para a Q1`:`${esc(inn)} entra no lugar de ${esc(out)}`);
-};
-
-function applyPromotion(last){
-  /* sem acesso/rebaixamento: as quadras são sorteadas do zero toda semana.
-     aqui só garantimos que os 10 fixos entrem na lista; suplentes completam se faltar. */
-  const isFixo=p=>S.players.fixos.includes(p);
-  const jogaram=[...last.Q1.lineup,...last.Q2.lineup];
-  let pool=S.players.fixos.slice();
-  if(pool.length<10){
-    [...jogaram,...S.players.suplentes].forEach(p=>{if(!isFixo(p)&&!pool.includes(p)&&pool.length<10)pool.push(p);});
-  }
-  pool=pool.slice(0,10);
-  S.draft.Q1.lineup=pool.slice(0,5);
-  S.draft.Q2.lineup=pool.slice(5,10);
-  S.draft.queue=[];
-  S.draft.swaps=[];
-}
-/* reconstrói a fila caso o rascunho tenha vindo de uma versão anterior */
-function ensureQueue(){
-  if(S.draft.queue&&S.draft.queue.length)return;
-  S.draft.queue=[...S.draft.Q2.lineup];
-}
-/* quem está fora da escalação e pode entrar */
-function availablePlayers(){
-  const playing=[...S.draft.Q1.lineup,...S.draft.Q2.lineup];
-  const sup=S.players.suplentes.filter(p=>!playing.includes(p));
-  const fix=S.players.fixos.filter(p=>!playing.includes(p));
-  return[...sup,...fix];
-}
-/* prevê o efeito de uma falta sem aplicar */
-function previewAbsence(out,inn){
-  ensureQueue();
-  const i1=S.draft.Q1.lineup.indexOf(out), i2=S.draft.Q2.lineup.indexOf(out);
-  if(i2>=0)return{tipo:'simples',court:'Q2',out,inn,up:null};
-  if(i1<0)return null;
-  const up=(S.draft.queue||[]).find(p=>S.draft.Q2.lineup.includes(p));
-  if(!up)return{tipo:'direto',court:'Q1',out,inn,up:null};
-  return{tipo:'cascata',court:'Q1',out,inn,up};
-}
-/* aplica: falta na Q1 => substituto entra na Q2 e o próximo da fila sobe */
-function applyAbsence(out,inn){
-  const pv=previewAbsence(out,inn); if(!pv)return null;
-  if(pv.tipo==='simples'){
-    S.draft.Q2.lineup[S.draft.Q2.lineup.indexOf(out)]=inn;
-  }else if(pv.tipo==='direto'){
-    S.draft.Q1.lineup[S.draft.Q1.lineup.indexOf(out)]=inn;
-  }else{
-    S.draft.Q1.lineup[S.draft.Q1.lineup.indexOf(out)]=pv.up;
-    S.draft.Q2.lineup[S.draft.Q2.lineup.indexOf(pv.up)]=inn;
-  }
-  S.draft.swaps=S.draft.swaps||[];
-  S.draft.swaps.push({out,inn,up:pv.up,court:pv.court});
-  save(); return pv;
-}
 $('#saveSession').onclick=()=>{
   let ok=true;['Q1','Q2'].forEach(q=>{if(!computeCourt(S.draft[q].lineup,S.draft[q].scores,PTS_Q2).complete)ok=false;});
   if(!ok){toast('Faltam placares — preencha os 5 jogos das duas quadras');return;}
   const iso=S.draft.date;
   if(S.sessions.some(s=>s.iso===iso)&&!confirm('Já existe rodada salva em '+fromISO(iso).toLocaleDateString('pt-BR')+'. Salvar mesmo assim?'))return;
-  const sess={iso,date:fromISO(iso).toLocaleDateString('pt-BR'),modo:MODO,teste:!!S.draft.teste,primeiroDia:S.draft.primeiroDia,serve:S.draft.serve,swaps:(S.draft.swaps||[]).slice(),
+  const sess={iso,date:fromISO(iso).toLocaleDateString('pt-BR'),modo:MODO,teste:!!S.draft.teste,primeiroDia:S.draft.primeiroDia,serve:S.draft.serve,sorteioEm:S.draft.sorteioEm||null,sorteioPor:S.draft.sorteioPor||'',swaps:(S.draft.swaps||[]).slice(),
     Q1:{lineup:[...S.draft.Q1.lineup],scores:S.draft.Q1.scores.map(s=>[...s])},
     Q2:{lineup:[...S.draft.Q2.lineup],scores:S.draft.Q2.scores.map(s=>[...s])}};
   if(fb.connected&&!AUTH.isAdmin){
@@ -2198,6 +2190,10 @@ function parseConfig(txt){
   if(!cfg.databaseURL)throw new Error('faltou o databaseURL');
   return cfg;
 }
+let CORRIGE=-1;
+$('#corrOk').onclick=salvarCorrecao;
+$('#corrCancel').onclick=()=>$('#corrModal').classList.remove('show');
+$('#corrModal').onclick=e=>{if(e.target.id==='corrModal')$('#corrModal').classList.remove('show');};
 $('#gateG').onclick=entrarGoogle;
 $('#gateE').onclick=entrarEmail;
 $('#fbConnect').onclick=()=>{let cfg;try{cfg=parseConfig($('#fbConfig').value);}catch(e){toast('Não consegui ler a configuração: '+e.message);return;}if(connectFirebase(cfg))toast('Conectado! Sincronizando com a patota');};
