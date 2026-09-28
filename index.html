@@ -329,6 +329,9 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .gate-card h2{font-size:23px;font-weight:800;margin-bottom:8px}
 .gate-card p{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0 0 20px}
 .logbox{background:var(--paper);border-radius:8px;padding:9px 11px;margin-top:7px;font-family:'JetBrains Mono';font-size:10px;line-height:1.6;max-height:190px;overflow:auto;color:var(--ink);word-break:break-word}
+.carregando{font-size:13px;color:var(--muted);font-weight:600}
+.carregando::after{content:'';display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid #d5ddd6;border-top-color:var(--ball-deep);border-radius:50%;animation:gira .8s linear infinite;vertical-align:-2px}
+@keyframes gira{to{transform:rotate(360deg)}}
 .gate-note{font-size:11.5px;color:var(--muted);margin-top:16px;line-height:1.5}
 .gate-note b{color:var(--ink)}
 body.travado{overflow:hidden}
@@ -792,7 +795,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-22a';
+const APP_VER='2026-09-23a';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -930,7 +933,7 @@ let S=freshState();
    as regras do Firebase, que checam o uid contra a lista admins/.
    ============================================================================ */
 let fb={app:null,db:null,auth:null,refs:{},connected:false,ouvindo:false};
-let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false,erroLogin:null};
+let AUTH={user:null,isAdmin:false,admins:{},adminsErro:null,adminsLido:false,erroLogin:null,resolvido:false};
 /* trilha do que acontece no login — some a dúvida sobre onde trava */
 const LOG=[];
 function reg(msg){LOG.push(new Date().toLocaleTimeString('pt-BR')+' · '+msg);if(LOG.length>25)LOG.shift();try{renderGate();}catch(e){}}
@@ -1005,10 +1008,22 @@ function desligarListeners(){
 function connectFirebase(cfg,silent){
   if(!window.firebase||!firebase.database){if(!silent)toast('Firebase não carregou. Segue em modo local.');return false;}
   try{
-    if(fb.app){try{fb.app.delete()}catch(e){}}
-    fb.app=firebase.initializeApp(cfg,'sq'+Date.now());
+    /* O nome da aplicação entra na chave onde o Firebase guarda a sessão
+       (firebase:authUser:<apiKey>:<nome>). Se mudar a cada carga, o login
+       nunca é reencontrado — por isso é FIXO. */
+    const NOME_APP='super-quarta';
+    const existente=(firebase.apps||[]).find(a=>a&&a.name===NOME_APP);
+    fb.app=existente||firebase.initializeApp(cfg,NOME_APP);
     fb.db=firebase.database(fb.app);
-    try{fb.auth=firebase.auth?firebase.auth(fb.app):null;reg('auth criado: '+(fb.auth?'sim':'NÃO'));}
+    try{
+      fb.auth=firebase.auth?firebase.auth(fb.app):null;
+      reg('auth criado: '+(fb.auth?'sim':'NÃO'));
+      if(fb.auth&&firebase.auth.Auth&&firebase.auth.Auth.Persistence){
+        fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+          .then(()=>reg('sessão será mantida entre visitas'))
+          .catch(e=>reg('não consegui manter a sessão: '+((e&&e.code)||e)));
+      }
+    }
     catch(e){fb.auth=null;reg('erro ao criar auth: '+(e.message||e));}
     reg('authDomain: '+(cfg.authDomain||'(ausente)'));
     reg('cookies de terceiros: '+(navigator.cookieEnabled?'habilitados no geral':'BLOQUEADOS'));
@@ -1034,6 +1049,7 @@ function connectFirebase(cfg,silent){
           .catch(e=>{ AUTH.erroLogin=(e.code||'')+(e.message?' — '+e.message:''); reg('FALHA no retorno: '+AUTH.erroLogin); });
       }catch(e){reg('getRedirectResult indisponível');}
       fb.auth.onAuthStateChanged(u=>{
+        AUTH.resolvido=true;
         reg('estado do login mudou: '+(u?('ENTROU como '+(u.email||u.uid.slice(0,8))):'sem usuário'));
         AUTH.user=u?{uid:String(u.uid||'').slice(0,128),name:limpaNome(u.displayName||u.email||'usuário')||'usuário',email:limpaNome(u.email)}:null;
         AUTH.isAdmin=!!(u&&AUTH.admins[u.uid]===true);
@@ -1831,6 +1847,14 @@ function renderGate(){
   const precisa=fb.connected&&!AUTH.user&&!GATE_OFF;
   if(!precisa){ g.setAttribute('hidden',''); g.style.display='none'; document.body.classList.remove('travado'); return; }
   g.removeAttribute('hidden'); g.style.display='flex'; document.body.classList.add('travado');
+  /* enquanto o Firebase ainda está restaurando a sessão, não mostra os botões:
+     quem já entrou antes não deve ver tela de login ao recarregar */
+  if(!AUTH.resolvido&&!AUTH.erroLogin){
+    $('#gateG').style.display='none'; $('#gateE').style.display='none';
+    $('#gateNote').innerHTML='<div class="carregando">Verificando sua sessão…</div>';
+    return;
+  }
+  $('#gateG').style.display=''; $('#gateE').style.display='';
   const semAuth=!fb.auth;
   const bg=$('#gateG'), be=$('#gateE');
   if(bg){bg.disabled=semAuth;bg.style.opacity=semAuth?'.45':'';}
