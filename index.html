@@ -253,6 +253,18 @@ h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;margin:0;letter-spacing:-.
 .corr-l{display:flex;align-items:center;gap:9px;margin-bottom:6px}
 .corr-l span{font-size:10px;font-weight:800;color:var(--muted);width:20px;flex:none}
 .corr-l select{flex:1;min-width:0;padding:9px 10px;border:1px solid #d5ddd6;border-radius:9px;font-family:'Inter';font-size:15px;font-weight:600;background:#fff}
+.modal.modal-wide{max-width:600px}
+.ed-top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;background:var(--paper);padding:11px 13px;border-radius:12px;margin-bottom:14px;font-size:13px;font-weight:600}
+.ed-top input[type=date]{padding:8px 10px;border:1px solid #d5ddd6;border-radius:9px;font-family:'Inter';font-size:15px;font-weight:600;background:#fff}
+.ed-top label{display:flex;align-items:center;gap:7px;cursor:pointer}
+.ed-lu{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.ed-sub{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:10px 0 2px}
+.ed-q .match{padding:7px 0 2px}
+.ed-q .score input{width:40px;height:40px}
+.ed-q .score input.bad{border-color:var(--down);background:#fff1ef}
+.ed-tot{font-size:11.5px;color:var(--muted);text-align:right;margin-top:6px}
+.ed-tot b{color:var(--ink)}.ed-tot.bad b{color:var(--down)}
+@media(max-width:640px){.ed-lu{grid-template-columns:1fr}}
 .sortline{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e3e9e4;border-left:3px solid var(--ball);border-radius:11px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:var(--muted);box-shadow:var(--shadow)}
 .sortline span{color:var(--ink);font-weight:600}
 .sd-sort{margin-bottom:10px;font-size:12px}
@@ -752,13 +764,13 @@ body.travado{overflow:hidden}
 </div>
 
 <div class="modal-bg" id="corrModal">
-  <div class="modal">
-    <div class="mh"><div class="modal-badge"></div><h3 id="corrTitulo">Corrigir escalação</h3></div>
+  <div class="modal modal-wide">
+    <div class="mh"><div class="modal-badge"></div><h3 id="corrTitulo">Editar rodada</h3></div>
     <div class="mb">
-      <p>Esta rodada ficou com jogadores faltando. Indique quem jogou em cada quadra — os placares e os pontos não mudam.</p>
+      <p>Corrija a data, quem jogou e os placares. Os pontos e a classificação são recalculados ao salvar.</p>
       <div id="corrBody"></div>
       <div class="mf" style="margin-top:14px">
-        <button class="btn btn-primary" id="corrOk">Salvar escalação</button>
+        <button class="btn btn-primary" id="corrOk">Salvar alterações</button>
         <button class="btn btn-ghost" id="corrCancel">Cancelar</button>
       </div>
     </div>
@@ -795,7 +807,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-09-23a';
+const APP_VER='2026-10-01a';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -1615,36 +1627,101 @@ function escalacaoFurada(s){
     return l.length!==5||l.some(x=>!x||!String(x).trim()||/^Jogador \d$/.test(x));
   });
 }
+/* ---------- editar rodada salva: data, etapa, escalação e placares ----------
+   Trabalha numa cópia (ED); a rodada oficial só muda quando o master salva. */
+let ED=null;
+function placarValido(a,b){
+  if(a==null&&b==null)return true;            /* jogo em branco: permitido */
+  if(a==null||b==null)return false;           /* só um lado preenchido */
+  return Math.max(a,b)===5&&Math.min(a,b)<=4; /* set até 5; 5×4 = tie-break */
+}
+function lerEditor(){
+  if(!ED)return;
+  $$('[data-ed-lu]').forEach(sel=>{const[q,k]=sel.dataset.edLu.split(':');ED[q].lineup[+k]=sel.value;});
+  $$('[data-ed-sc]').forEach(inp=>{const[q,m,lado]=inp.dataset.edSc.split(':');const v=inp.value.replace(/[^0-9]/g,'');ED[q].scores[+m][+lado]=v===''?null:+v;});
+}
 function abrirCorrigir(i){
-  if(!podeEditarOficial()){toast('Somente o master corrige escalação');return;}
-  CORRIGE=i; const s=S.sessions[i]; if(!s)return;
-  const todos=[...S.players.fixos,...S.players.suplentes];
-  $('#corrTitulo').textContent='Escalação de '+(s.date||s.iso);
-  $('#corrBody').innerHTML=['Q1','Q2'].map(q=>{
-    const l=(s[q]&&s[q].lineup)||[];
-    return `<div class="corr-q"><div class="corr-h">${q==='Q1'?'Quadra 1':'Quadra 2'}</div>
-      ${[0,1,2,3,4].map(k=>{
-        const atual=l[k]||'';
-        const valido=todos.includes(atual)?atual:'';
-        return `<div class="corr-l"><span>J${k+1}</span>
-          <select data-corr="${q}:${k}"><option value="">— escolher —</option>
-          ${todos.map(p=>`<option value="${esc(p)}" ${p===valido?'selected':''}>${esc(p)}</option>`).join('')}
-          </select></div>`;
-      }).join('')}</div>`;
-  }).join('');
+  if(!podeEditarOficial()){toast('Somente o master edita rodadas');return;}
+  const s=sanearSessao(S.sessions[i]); if(!s)return;
+  CORRIGE=i;
+  ED={iso:s.iso,teste:!!s.teste,modo:modoDe(s),serve:s.serve,
+      Q1:{lineup:s.Q1.lineup.slice(),scores:s.Q1.scores.map(p=>p.slice())},
+      Q2:{lineup:s.Q2.lineup.slice(),scores:s.Q2.scores.map(p=>p.slice())},
+      orig:{Q1:s.Q1.scores.map(p=>p.slice()),Q2:s.Q2.scores.map(p=>p.slice())}};
+  $('#corrTitulo').textContent='Editar rodada de '+(s.date||s.iso);
+  renderEditor();
   $('#corrModal').classList.add('show');
 }
+function renderEditor(){
+  const roster=[...S.players.fixos,...S.players.suplentes];
+  const pattern=padraoSaque(ED.serve);
+  const top=`<div class="ed-top"><label>Data <input type="date" id="edData" value="${esc(ED.iso)}"></label>
+    ${ED.modo==='jogo'?`<label><input type="checkbox" id="edConta" ${ED.teste?'':'checked'}> Conta para a etapa</label>`:''}</div>`;
+  const quadras=['Q1','Q2'].map(q=>{
+    const d=ED[q];
+    /* quem jogou mas saiu do elenco continua na lista — senão o nome se perderia */
+    const opts=[...roster]; d.lineup.forEach(p=>{if(p&&!opts.includes(p))opts.push(p);});
+    const lu=[0,1,2,3,4].map(k=>`<div class="corr-l"><span>J${k+1}</span>
+      <select data-ed-lu="${q}:${k}"><option value="">— escolher —</option>
+      ${opts.map(p=>`<option value="${esc(p)}" ${p===d.lineup[k]?'selected':''}>${esc(p)}</option>`).join('')}
+      </select></div>`).join('');
+    let total=0, completa=true;
+    const jogos=SCHED.map((m,i)=>{
+      const srvA=pattern[i]==='a';
+      const srvT=srvA?m.a:m.b, othT=srvA?m.b:m.a, sI=srvA?0:1, oI=srvA?1:0;
+      const sc=d.scores[i], ok=placarValido(sc[0],sc[1]);
+      if(sc[0]==null||sc[1]==null||!ok)completa=false;
+      else{const[pa,pb]=matchPoints(sc[0],sc[1]);total+=2*(pa+pb);}
+      const nome=k=>esc(nomeOu(d.lineup[k]));
+      const inp=lado=>`<input class="mono ${ok?'':'bad'}" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-ed-sc="${q}:${i}:${lado}" value="${sc[lado]==null?'':sc[lado]}">`;
+      return `<div class="match">
+        <div class="team serving"><span class="sv"></span>${nome(srvT[0])} <small>&</small> ${nome(srvT[1])}</div>
+        <div class="score">${inp(sI)}<span class="x">×</span>${inp(oI)}</div>
+        <div class="team r">${nome(othT[0])} <small>&</small> ${nome(othT[1])}</div>
+      </div>`;
+    }).join('');
+    const tot=ED.modo==='jogo'
+      ?`<div class="ed-tot ${completa&&total!==50?'bad':''}">Pontos distribuídos na quadra: <b>${completa?total:'—'}</b> de 50</div>`:'';
+    return `<div class="corr-q ed-q"><div class="corr-h">${q==='Q1'?'Quadra 1':'Quadra 2'}</div>
+      <div class="ed-sub">Escalação</div><div class="ed-lu">${lu}</div>
+      <div class="ed-sub">Placares</div>${jogos}${tot}</div>`;
+  }).join('');
+  $('#corrBody').innerHTML=top+quadras;
+  $$('[data-ed-lu]').forEach(sel=>sel.onchange=()=>{lerEditor();renderEditor();});
+  $$('[data-ed-sc]').forEach(inp=>{
+    inp.oninput=()=>{inp.value=inp.value.replace(/[^0-9]/g,'').slice(0,1);};
+    inp.onchange=()=>{lerEditor();renderEditor();};
+  });
+}
 function salvarCorrecao(){
-  const s=S.sessions[CORRIGE]; if(!s)return;
-  const novo={Q1:[],Q2:[]};
-  $$('[data-corr]').forEach(sel=>{const[q,k]=sel.dataset.corr.split(':');novo[q][+k]=sel.value;});
-  const falta=['Q1','Q2'].some(q=>novo[q].some(x=>!x));
-  if(falta){toast('Preencha os 10 jogadores');return;}
-  const rep=['Q1','Q2'].flatMap(q=>novo[q]);
-  if(new Set(rep).size!==10){toast('Há jogador repetido');return;}
-  s.Q1.lineup=novo.Q1; s.Q2.lineup=novo.Q2;
+  const s=S.sessions[CORRIGE]; if(!s||!ED)return;
+  if(!podeEditarOficial()){toast('Somente o master edita rodadas');return;}
+  lerEditor();
+  /* data */
+  const iso0=$('#edData').value;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso0)){toast('Data inválida');return;}
+  let d=fromISO(iso0);
+  let ajuste='';
+  if(d.getDay()!==3){d=refWednesday(d);ajuste=' — data ajustada para a quarta '+d.toLocaleDateString('pt-BR');}
+  const iso=toISO(d);
+  if(S.sessions.some((x,j)=>j!==CORRIGE&&x.iso===iso)){toast('Já existe rodada nessa data');return;}
+  /* escalação */
+  if(['Q1','Q2'].some(q=>ED[q].lineup.some(x=>!x))){toast('Preencha os 10 jogadores');return;}
+  if(new Set([...ED.Q1.lineup,...ED.Q2.lineup]).size!==10){toast('Há jogador repetido');return;}
+  /* placares: só cobra os jogos que foram alterados, para não travar rodadas antigas */
+  for(const q of['Q1','Q2'])for(let i=0;i<5;i++){
+    const[a,b]=ED[q].scores[i],[oa,ob]=ED.orig[q][i];
+    if((a!==oa||b!==ob)&&!placarValido(a,b)){
+      toast(`${q==='Q1'?'Quadra 1':'Quadra 2'}, jogo ${i+1}: placar inválido (vai até 5; 5×4 é tie-break)`);return;
+    }
+  }
+  s.iso=iso; s.date=d.toLocaleDateString('pt-BR');
+  if(ED.modo==='jogo')s.teste=!$('#edConta').checked;
+  ['Q1','Q2'].forEach(q=>{s[q]={lineup:ED[q].lineup.slice(),scores:ED[q].scores.map(p=>p.slice())};});
+  S.sessions.sort((a,b)=>(a.iso||'').localeCompare(b.iso||''));
+  ED=null; CORRIGE=-1;
   $('#corrModal').classList.remove('show');
-  save(); renderAll(); toast('Escalação corrigida ✓');
+  save(); renderAll(); toast('Rodada atualizada ✓'+ajuste);
 }
 function sessionLabel(s){
   const p=periodOf(s);
@@ -1655,23 +1732,6 @@ function sessionLabel(s){
   }
   const ri=roundInfo(s.iso);
   return `${p.label} \u00b7 quarta ${ri.n} de ${ri.total}`;
-}
-function editSession(i){
-  const s=S.sessions[i];
-  const nova=prompt('Data da rodada (dd/mm/aaaa):', s.date||fromISO(s.iso).toLocaleDateString('pt-BR'));
-  if(!nova)return;
-  const m=nova.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(!m){toast('Data inválida — use dd/mm/aaaa');return;}
-  let d=new Date(+m[3],+m[2]-1,+m[1]);
-  if(isNaN(d)){toast('Data inválida');return;}
-  if(d.getDay()!==3){d=refWednesday(d);toast('Ajustado para a quarta '+d.toLocaleDateString('pt-BR'));}
-  const iso=toISO(d);
-  if(S.sessions.some((x,j)=>j!==i&&x.iso===iso)){toast('Já existe rodada nessa data');return;}
-  s.iso=iso; s.date=d.toLocaleDateString('pt-BR');
-  if(modoDe(s)==='jogo'){
-    s.teste=confirm('Esta rodada conta para a etapa?\n\nOK = conta normalmente\nCancelar = marcar como teste (fica no histórico, fora da classificação)')?false:true;
-  }
-  save();renderAll();toast('Rodada atualizada');
 }
 function renderSessoes(){
   const list=$('#sessoesList');
@@ -1692,7 +1752,7 @@ function renderSessoes(){
     </div><div class="sd" id="sd-${i}" hidden></div>`;
   }).join('');
   $$('[data-corr-open]').forEach(b=>b.onclick=()=>abrirCorrigir(+b.dataset.corrOpen));
-  $$('[data-edit]').forEach(b=>b.onclick=()=>editSession(+b.dataset.edit));
+  $$('[data-edit]').forEach(b=>b.onclick=()=>abrirCorrigir(+b.dataset.edit));
   $$('[data-see]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.see, box=$('#sd-'+i);
     if(!box.hasAttribute('hidden')){box.setAttribute('hidden','');b.textContent='Ver jogos';return;}
@@ -2216,7 +2276,7 @@ function parseConfig(txt){
 }
 let CORRIGE=-1;
 $('#corrOk').onclick=salvarCorrecao;
-$('#corrCancel').onclick=()=>$('#corrModal').classList.remove('show');
+$('#corrCancel').onclick=()=>{ED=null;$('#corrModal').classList.remove('show');};
 $('#corrModal').onclick=e=>{if(e.target.id==='corrModal')$('#corrModal').classList.remove('show');};
 $('#gateG').onclick=entrarGoogle;
 $('#gateE').onclick=entrarEmail;
