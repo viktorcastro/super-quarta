@@ -807,7 +807,7 @@ const FIREBASE_CONFIG_TEXT = `
    `;
    ========================================================================== */
 
-const APP_VER='2026-10-01a';
+const APP_VER='2026-10-07a';
 
 const FIREBASE_CONFIG_TEXT = `
 COLE_AQUI
@@ -1467,7 +1467,7 @@ function renderRodadaMode(){
   const p=periodOf(s);
   const idx=sessoesNovas().findIndex(x=>x.iso===s.iso);
   const rot=p.tipo==='etapa'?`${p.label} · rodada ${(Math.max(0,idx)%RODADAS_POR_ETAPA)+1} de ${RODADAS_POR_ETAPA}`:p.label;
-  const sw=(s.swaps&&s.swaps.length)?`<div class="sub">${s.swaps.map(x=>esc(x.inn)+' entrou por '+esc(x.out)).join(' · ')}</div>`:'';
+  const sw=(s.swaps&&s.swaps.length)?`<div class="sub">${s.swaps.map(x=>esc(x.inn)+' substituiu '+esc(x.out)).join(' · ')}</div>`:'';
   bn.innerHTML=`<div class="savedbar"><span class="ic">📋</span>
     <span class="tx"><b>Rodada já salva</b> — ${rot}${s.teste?' · teste':''}
       <div class="sub">Resultados abaixo, como foram lançados. Para corrigir, use o botão Editar na aba Histórico.</div>${sw}</span>
@@ -1739,7 +1739,7 @@ function renderSessoes(){
   const sorted=[...S.sessions].map((s,i)=>({s,i})).sort((a,b)=>(b.s.iso||'').localeCompare(a.s.iso||''));
   list.innerHTML=sorted.map(({s,i})=>{
     const ri=roundInfo(s.iso);
-    const sw=(s.swaps&&s.swaps.length)?`<div class="w" style="color:var(--ball-deep)">${s.swaps.map(x=>esc(x.inn)+' por '+esc(x.out)).join(' \u00b7 ')}</div>`:'';
+    const sw=(s.swaps&&s.swaps.length)?`<div class="w" style="color:var(--ball-deep)">${s.swaps.map(x=>esc(x.inn)+' substituiu '+esc(x.out)).join(' \u00b7 ')}</div>`:'';
     return `<div class="sess-row">
       <div class="n">${ri.n||'?'}</div>
       <div class="meta"><div class="d">${esc(s.date||s.iso)}${s.teste?' <span class="sdsup">teste</span>':''}</div>
@@ -2022,23 +2022,55 @@ function validarRestricoes(pool,rest){
   return{erros,by};
 }
 /* monta as duas quadras já respeitando as restrições, espalhando pedidos iguais
-   em quadras diferentes; o resto é sorteado */
+   em quadras diferentes; os suplentes do dia são divididos o mais igual possível
+   entre as quadras (2 → 1 e 1; 3 → 2 e 1); o resto é sorteado */
+function ehSuplente(p){return !!p&&!S.players.fixos.includes(p);}
 function planDraw(pool,rest){
   const{erros,by}=validarRestricoes(pool,rest);
   if(erros.length)return{erros};
-  const courts=[Array(5).fill(null),Array(5).fill(null)];
-  const usados=new Set(), aplicadas=[];
-  Object.keys(by).forEach(t=>{
-    const ordem=shuffleArr([0,1]);          /* qual quadra recebe cada um, sem viés */
-    shuffleArr(by[t]).forEach((p,k)=>{
-      const q=ordem[k];
-      courts[q][RSLOT[t]]=p; usados.add(p);
-      aplicadas.push({player:p,type:t,court:q});
+  const tipos=Object.keys(by);
+  const totalSup=pool.filter(ehSuplente).length;
+  /* testa as combinações de quadra para as restrições e fica com as que deixam
+     os suplentes mais equilibrados; entre as empatadas, sorteia */
+  const combos=[];
+  (function gera(i,esc){
+    if(i===tipos.length){combos.push(esc.slice());return;}
+    [[0,1],[1,0]].forEach(o=>{esc.push(o);gera(i+1,esc);esc.pop();});
+  })(0,[]);
+  const montar=ordens=>{
+    const courts=[Array(5).fill(null),Array(5).fill(null)], aplicadas=[];
+    tipos.forEach((t,ti)=>{
+      by[t].forEach((p,k)=>{const q=ordens[ti][k];courts[q][RSLOT[t]]=p;aplicadas.push({player:p,type:t,court:q});});
     });
+    return{courts,aplicadas};
+  };
+  const supEm=c=>c.filter(ehSuplente).length;
+  const livres=c=>c.filter(x=>x===null).length;
+  /* quantos suplentes cada quadra recebe ao final: o que falta vai sempre para a que tem menos */
+  const distribuir=courts=>{
+    const n=[supEm(courts[0]),supEm(courts[1])], cap=[livres(courts[0]),livres(courts[1])], add=[0,0];
+    let faltam=totalSup-n[0]-n[1];
+    while(faltam>0){
+      const pode=[0,1].filter(q=>add[q]<cap[q]);
+      const menor=Math.min(...pode.map(q=>n[q]+add[q]));
+      const q=shuffleArr(pode.filter(q=>n[q]+add[q]===menor))[0];
+      add[q]++; faltam--;
+    }
+    return{add,dif:Math.abs(n[0]+add[0]-n[1]-add[1])};
+  };
+  tipos.forEach(t=>by[t]=shuffleArr(by[t]));
+  const avaliados=combos.map(o=>{const m=montar(o);return Object.assign(m,distribuir(m.courts));});
+  const melhor=Math.min(...avaliados.map(a=>a.dif));
+  const plano=shuffleArr(avaliados.filter(a=>a.dif===melhor))[0];
+  const usados=new Set(plano.aplicadas.map(a=>a.player));
+  const sups=shuffleArr(pool.filter(p=>ehSuplente(p)&&!usados.has(p)));
+  const fixos=shuffleArr(pool.filter(p=>!ehSuplente(p)&&!usados.has(p)));
+  plano.courts.forEach((c,q)=>{
+    const vagas=shuffleArr(c.map((x,s)=>x===null?s:-1).filter(s=>s>=0));
+    const quem=[...sups.splice(0,plano.add[q]),...fixos.splice(0,vagas.length-plano.add[q])];
+    vagas.forEach((s,k)=>c[s]=quem[k]);
   });
-  const resto=shuffleArr(pool.filter(p=>!usados.has(p)));
-  for(let q=0;q<2;q++)for(let s=0;s<5;s++)if(courts[q][s]===null)courts[q][s]=resto.shift();
-  return{courts,aplicadas};
+  return{courts:plano.courts,aplicadas:plano.aplicadas};
 }
 function doDraw(restrictions){
   if(fb.connected&&!podeEditarOficial()){toast('Somente o master pode sortear os confrontos');return{erros:['sem permissão']};}
@@ -2136,7 +2168,7 @@ function renderAbsPreview(){
   const pv=previewAbsence(out,inn); const box=$('#absPreview');
   if(!pv){box.innerHTML='';return;}
   box.innerHTML=`<div class="prev"><div class="hd">Como vai ficar</div>
-    <div class="ln"><span class="tagq${pv.court==='Q2'?' q2':''}">${pv.court}</span><b>${esc(inn)}</b> entra no lugar de ${esc(out)}</div>
+    <div class="ln"><span class="tagq${pv.court==='Q2'?' q2':''}">${pv.court}</span><b>${esc(inn)}</b> substitui ${esc(out)}</div>
     <div class="ln" style="color:var(--muted)">As quadras são sorteadas do zero, então a posição não muda nada — sorteie de novo depois de trocar.</div></div>`;
 }
 function renderSorteioInfo(){
@@ -2148,8 +2180,9 @@ function renderSorteioInfo(){
 function renderSwapLog(){
   const sw=S.draft.swaps||[], el=$('#swapLog');
   if(!sw.length){el.innerHTML='';return;}
+  /* a quadra mostrada é a atual: depois de um novo sorteio o suplente pode ter mudado de quadra */
   el.innerHTML=`<div class="swaplog"><div class="t">Substituições desta rodada</div>${sw.map(s=>
-    `<div class="it"><b>${esc(s.inn)}</b> entra por <b>${esc(s.out)}</b> <span class="ar">·</span> ${s.court==='Q1'?'Quadra 1':'Quadra 2'}</div>`).join('')}</div>`;
+    `<div class="it"><b>${esc(s.inn)}</b> substitui <b>${esc(s.out)}</b> <span class="ar">·</span> ${(courtOf(s.inn)||s.court)==='Q1'?'Quadra 1':'Quadra 2'}</div>`).join('')}</div>`;
 }
 $('#openAbsence').onclick=openAbsence;
 $('#absCancel').onclick=()=>$('#absModal').classList.remove('show');
@@ -2161,7 +2194,7 @@ $('#absGo').onclick=()=>{
   $('#absModal').classList.remove('show');
   if(!pv)return;
   renderAll();
-  toast(`${esc(inn)} entra no lugar de ${esc(out)}`);
+  toast(`${esc(inn)} substitui ${esc(out)}`);
 };
 
 function applyPromotion(last){
